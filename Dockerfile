@@ -1,6 +1,6 @@
 FROM python:3.9-alpine3.14
 
-RUN apk update && apk add g++ 
+RUN apk update && apk add g++
 
 RUN apk --virtual add git && git clone https://github.com/cpp-redis/cpp_redis.git && \
 cd cpp_redis && git submodule init && git submodule update && \

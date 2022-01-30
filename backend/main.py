@@ -18,8 +18,8 @@ def connect(sid, _):
 async def chess_move(sid, data):
     logging.info("chess_move")
     import json
-    x = json.dumps({"data": "Fuck"})
-    process = subprocess.Popen([f"{ENGINE_PATH}/chess", x], stdout=subprocess.PIPE)
+    x = json.dumps({"data": {"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0"}})
+    process = subprocess.Popen([f"{ENGINE_PATH}/chess.out", x], stdout=subprocess.PIPE)
     out = process.communicate()[0].decode("utf-8")
     logging.info(out)
     await socket.emit("chess_response", {"data": out})
