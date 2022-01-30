@@ -1,0 +1,21 @@
+version: "3"
+
+services:
+    server:
+        build: .
+        ports:
+            - "8000:8000"
+        volumes:
+            - "./:/app"
+        environment:
+            - REDIS_URL=redis://core-redis:6379
+
+    redis-db:
+        image: redis:alpine
+        ports:
+            - 6379:6379
+        healthcheck:
+            test: ["CMD", "redis-cli","ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
