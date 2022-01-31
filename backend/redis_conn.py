@@ -9,5 +9,5 @@ class RedisClient:
 redis_conn = RedisClient()
 
 
-def start_connection():
+async def start_connection(_):
     redis_conn.client = redis.Redis.from_url(environ["REDIS_URL"])
