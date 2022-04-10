@@ -586,7 +586,7 @@ function processClick(socket, index, Players){
             socket.emit("chessMove", [selectedPiece, index]);
         }
         else
-        unselect();
+            unselect();
         selectedPiece = null;
     }
     // jshint ignore:end
@@ -595,8 +595,8 @@ function processClick(socket, index, Players){
 function postMove(Players, early=false){
     boardToHTML(getThisPlayer() == Players.black);
     if(!early){
-    nextMoves = board.getNextMoves();
-    if(board.isCheck(sessionStorage.getItem("player")))
-        alert("You're in check");
+        nextMoves = board.getNextMoves();
+        if(board.isCheck(sessionStorage.getItem("player")))
+            alert("You're in check");
     }
 }

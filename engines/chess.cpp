@@ -7,6 +7,7 @@
 #include<map>
 
 #include "json.hpp"
+#include "log.hpp"
 
 #define BLACK 0
 #define WHITE 1
@@ -14,6 +15,7 @@
 using std::string;
 using std::array;
 using std::vector;
+using std::map;
 using json = nlohmann::json;
 
 typedef std::bitset<64> boardType;
@@ -21,14 +23,16 @@ typedef uint8_t playerType;
 
 
 void printBoard(boardType board) {
-    std::cout << std::endl;
+    log("");
+    string str = "";
     for (int i=0; i < 64;i++) {
-        std::cout << board[i] << " ";
+        str += std::to_string(board[i]) + " ";
         if (i % 8 == 7) {
-            std::cout << std::endl;
+            str += "\n";
         }
     }
-    std::cout << std::endl;
+    log(str);
+    log("");
 }
 
 namespace communicate {
@@ -40,16 +44,12 @@ namespace communicate {
         return json::parse(jsonStr);
     }
 
-    string output(std::map<uint8_t, boardType> moves) {
-        vector<array<int, 2>> parsedMoves;
-        for (auto itr = moves.begin(); itr != moves.end(); itr++) {
-            for (int i=0; i < 64; i++) {
-                if (itr->second[i]) {
-                    parsedMoves.push_back({itr->first, i});
-                }
-            }
-        }
-        return json(parsedMoves).dump();
+    string output(map<string, string> outputData) {
+        return json(outputData).dump();
+    }
+
+    void exitWithError() {
+        std::cout << output({{"status", "EXC"}});
     }
 }
 
@@ -59,22 +59,29 @@ namespace preCalculation {
         array<array<boardType, 4096>, 64> rookLookup;
         array<unsigned long long, 64> bishopMagic;
         array<unsigned long long, 64> rookMagic;
+        array<boardType, 64> bishopBlockers;
+        array<boardType, 64> rookBlockers;
     };
 
     preCalc loadJSON() {
         string attacksFile = "/app/engines/chess_utils/attacks.json";
         string magicFile = "/app/engines/chess_utils/magics.json";
-        //string magicFile = "chess_utils/magics.json";
-        //string attacksFile = "chess_utils/attacks.json";
+        string blockerFile = "/app/engines/chess_utils/blockers.json";
 
-        json attacks, magics;
-        std::ifstream aF(attacksFile), mF(magicFile);
+        json attacks, magics, blockers;
+        std::ifstream aF(attacksFile), mF(magicFile), bF(blockerFile);
         aF >> attacks;
         mF >> magics;
+        bF >> blockers;
         array<array<unsigned long long, 512>, 64> rawBishop = attacks.at("bishop").get<array<array<unsigned long long, 512>, 64>>();
         array<array<unsigned long long, 4096>, 64> rawRook =  attacks.at("rook").get<array<array<unsigned long long, 4096>, 64>>();
         array<array<boardType, 512>, 64> bishopLookup;
         array<array<boardType, 4096>, 64> rookLookup;
+        array<unsigned long long, 64> rawBishopBlockers = blockers.at("bishop").get<array<unsigned long long, 64>>();
+        array<unsigned long long, 64> rawRookBlockers = blockers.at("rook").get<array<unsigned long long, 64>>();
+        array<boardType, 64> bishopBlockers;
+        array<boardType, 64> rookBlockers;
+
         for (int i=0; i<64; i++) {
             for (int j=0; j<4096; j++) {
                 if (j < 512) {
@@ -82,13 +89,17 @@ namespace preCalculation {
                 } 
                 rookLookup[i][j] = boardType(rawRook[i][j]);   
             }
+            bishopBlockers[i] = boardType(rawBishopBlockers[i]);
+            rookBlockers[i] = boardType(rawRookBlockers[i]);
         }
         
         return {
             bishopLookup,
             rookLookup,
             magics.at("bishop").get<array<unsigned long long, 64>>(),
-            magics.at("rook").get<array<unsigned long long, 64>>()
+            magics.at("rook").get<array<unsigned long long, 64>>(),
+            bishopBlockers,
+            rookBlockers
         };
     }
 }
@@ -98,32 +109,37 @@ class Board {
         string fen;
         char _board[64];
 
+        short int getDirection(playerType player) {
+            return (player == BLACK) ? 1 : -1;
+        }
+
         boardType getPawnMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
-            uint8_t direction = (player == BLACK) ? 1 : -1;
             boardType allPieces = whitePieces | blackPieces;
             boardType nonCaptures = boardType(0);
             boardType captures = boardType(0);
             boardType* enemyPieces = (player == BLACK) ? &whitePieces : &blackPieces;
+            
             // Normal Move
-            uint8_t nextMove = pos + direction * 8;
+            uint8_t nextMove = pos + getDirection(player) * 8;
             if (!(allPieces[nextMove]) && nextMove >= 0 && nextMove < 64) {
                 nonCaptures.set(nextMove);
             }
             // Double Move at initial position
-            nextMove = pos + direction * 16;
-            if (player == BLACK && pos / 8 == 1 && !allPieces[nextMove] && nextMove >= 0 && nextMove < 64) {
+            nextMove = pos + getDirection(player) * 16;
+            uint8_t intermediateSquare = pos + getDirection(player) * 8;
+            if (player == BLACK && pos / 8 == 1 && !allPieces[intermediateSquare] && !allPieces[nextMove] && nextMove >= 0 && nextMove < 64) {
                 nonCaptures.set(nextMove);
-            } else if (player == WHITE && pos / 8 == 6 && !allPieces[nextMove] && nextMove >= 0 && nextMove < 64) {
+            } else if (player == WHITE && pos / 8 == 6 && !allPieces[intermediateSquare] && !allPieces[nextMove] && nextMove >= 0 && nextMove < 64) {
                 nonCaptures.set(nextMove);
             }
 
             // Capture Left
-            nextMove = pos + direction * 8 - 1;
+            nextMove = pos + getDirection(player) * 8 - 1;
             if (pos % 8 != 0 && nextMove >= 0 && nextMove < 64) {
                 captures.set(nextMove);
             }
             // Capture Right
-            nextMove = pos + direction * 8 + 1;
+            nextMove = pos + getDirection(player) * 8 + 1;
             if (pos % 8 != 7 && nextMove >= 0 && nextMove < 64) {
                 captures.set(nextMove);
             }
@@ -179,7 +195,7 @@ class Board {
             boardType movesBoard = boardType(0);
 
             if (pos / 8 != 0)
-                    movesBoard.set(pos - 8);
+                movesBoard.set(pos - 8);
             if (pos / 8 != 7)
                 movesBoard.set(pos + 8);
                 
@@ -199,24 +215,26 @@ class Board {
                     movesBoard.set(pos + 9);
             }
             
-            return movesBoard &= ~*ownPieces;
+            return movesBoard & ~*ownPieces;
         }
 
-        uint16_t getHash(boardType board, unsigned long long magic, bool isBishop) {
-            return (board.to_ullong() * magic) >> 64 - (isBishop ? 9 : 12);
+        uint16_t getHash(boardType board, unsigned long long magic, boardType blockerMask, bool isBishop) {
+            return ((board & blockerMask).to_ullong() * magic) >> 64 - (isBishop ? 9 : 12);
         }
 
         boardType getBishopMoves(preCalculation::preCalc data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
             boardType allPieces = whitePieces | blackPieces;
             boardType* ownPieces = (player == WHITE) ? &whitePieces : &blackPieces;
-            boardType allMoves = data.bishopLookup[pos][getHash(allPieces, data.bishopMagic[pos], true)];
+            uint16_t index = getHash(allPieces, data.bishopMagic[pos], data.bishopBlockers[pos], true);
+            boardType allMoves = data.bishopLookup[pos][index];
             return allMoves & ~*ownPieces;
         }
 
         boardType getRookMoves(preCalculation::preCalc data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
             boardType allPieces = whitePieces | blackPieces;
             boardType* ownPieces = (player == WHITE) ? &whitePieces : &blackPieces;
-            boardType allMoves = data.bishopLookup[pos][getHash(allPieces, data.rookMagic[pos], false)];
+            uint16_t index = getHash(allPieces, data.rookMagic[pos], data.rookBlockers[pos], false);
+            boardType allMoves = data.rookLookup[pos][index];
             return allMoves & ~*ownPieces;
         }
 
@@ -229,7 +247,7 @@ class Board {
         boardType getCastlingMoves(preCalculation::preCalc &preCalculatedData, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t kingPos) {
             boardType castlingMoves = boardType(0);
             boardType allPieces = boardType(0);
-            std::map<uint8_t, boardType> enemyMoves = getNextMoves(preCalculatedData, !player, true);
+            map<uint8_t, boardType> enemyMoves = getNextMoves(preCalculatedData, !player, true);
             boardType enemyAttacks = boardType(0);
 
             for (auto itr = enemyMoves.begin(); itr != enemyMoves.end(); itr++) {
@@ -286,24 +304,31 @@ class Board {
             }
         }
 
-        void parseHalfMoves(int &index) {
-            halfMoves = 0;
+        uint16_t parseIntInFEN(int &index) {
+            uint16_t num = 0;
             for (; fen[index] != ' '; index++) {
-                halfMoves *= 10;
-                halfMoves += fen[index] - '0';
+                num *= 10;
+                num += fen[index] - '0';
             }
+            return num;
         }
 
     public:
-        vector<uint8_t> whitePositions;
-        vector<uint8_t> blackPositions;
-        playerType enPassantSquare;
+        short int enPassantSquare;
         bool castlingRights[2][2]; // [color][side] Queen -> 0, King -> 1
         playerType player;
         uint8_t halfMoves;
+        uint16_t fullMoves;
 
         static uint8_t parseNotation(string notation) {
             return (7 - (notation[1] - '1')) * 8 + notation[0] - 'a';
+        }
+
+        static string getNotation(int pos) {
+            string out;
+            out.push_back((pos % 8 + 'a'));
+            out.push_back((7 - pos / 8) + '1');
+            return out;
         }
 
         bool getCastlingRights(int color, int side) {
@@ -316,9 +341,10 @@ class Board {
             return WHITE;
         }
 
-        Board(string _fen) {
-            fen = _fen;
-            strcpy(_board, "");
+        void parseFen() {
+            for (uint8_t j=0; j < 64; j++) {
+                _board[j] = ' ';
+            }
             int i, boardIndex=0;
             for (i=0; fen[i] != ' '; i++) {
                 if (fen[i] == '/')
@@ -329,40 +355,52 @@ class Board {
                 } else {
                     // Piece
                     _board[boardIndex] = fen[i];
-                    if (getPlayer(fen[i]) == WHITE) {
-                        whitePositions.push_back(boardIndex);
-                    } else {
-                        blackPositions.push_back(boardIndex);
-                    }
                     boardIndex++;
                 }
             }
             player = fen[++i] == 'b' ? BLACK : WHITE;
             i += 2; // Shift to castling
             parseCastlingRights(i);
-            i++; // Shift to enPassantsquare
+            i++;  // Eat Space
             if (fen[i] != '-') {
                 enPassantSquare = parseNotation(fen.substr(i, 2));
                 i += 2;
             } else {
-                i++;
+                enPassantSquare = -1;
+                i++; // Eat Space
             }
-            parseHalfMoves(i);
+            halfMoves = (uint8_t) parseIntInFEN(i);
+            i++; // Eat Space
+            fullMoves = parseIntInFEN(i);
         }
 
-        std::map<uint8_t, boardType> getNextMoves(preCalculation::preCalc &preCalculatedData, playerType player, bool quick = false) {
+        Board(string _fen) {
+            fen = _fen;
+            parseFen();
+        }
+
+        Board(Board &original) {
+            this->fen = original.fen;
+            parseFen();
+        }
+
+        map<uint8_t, boardType> getNextMoves(preCalculation::preCalc &preCalculatedData, playerType player, bool quick = false) {
             boardType whitePieces = boardType(0), blackPieces = boardType(0);
             uint8_t kingPos;
-            std::map<uint8_t, boardType> moves = std::map<uint8_t, boardType>();
-            for (auto i=whitePositions.begin(); i != whitePositions.end(); i++) {
-                whitePieces.set(*i);
+            map<uint8_t, boardType> moves = map<uint8_t, boardType>();
+            vector<uint8_t> playerSquares = vector<uint8_t>();
+            for (uint8_t i=0; i < 64; i++) {
+                if (_board[i] == ' ')
+                    continue;
+                if (getPlayer(_board[i]) == WHITE)
+                    whitePieces.set(i);
+                else
+                    blackPieces.set(i);
+                if (getPlayer(_board[i]) == player)
+                    playerSquares.push_back(i);
             }
-            for (auto i=blackPositions.begin(); i != blackPositions.end(); i++) {
-                blackPieces.set(*i);
-            }
-            vector<uint8_t>* playerSquares = player == WHITE ? &whitePositions : &blackPositions;
 
-            for (auto i=playerSquares->begin(); i != playerSquares->end(); i++) {
+            for (auto i=playerSquares.begin(); i != playerSquares.end(); i++) {
                 char piece = tolower(_board[*i]);
                 if (piece == 'p') {
                     moves[*i] = getPawnMoves(whitePieces, blackPieces, player, *i);
@@ -381,21 +419,230 @@ class Board {
             }
             if (quick)
                 return moves;
-            moves[kingPos] |= getCastlingMoves(preCalculatedData, whitePieces, blackPieces, player, kingPos);
+            // moves[kingPos] |= getCastlingMoves(preCalculatedData, whitePieces, blackPieces, player, kingPos);
             return moves;
+        }
+
+        uint8_t findKing(playerType player) {
+            char target = player == BLACK ? 'k' : 'K';
+            if (_board[4] == target) {
+                return 4;
+            }
+            if (_board[60] == target) {
+                return 60;
+            }
+            for (int i=0; i < 64; i++) {
+                if (_board[i] == target) {
+                    return i;
+                }
+            }
+            // Should never reach this
+            return -1;
+        }
+
+        string getFen() {
+            return fen;
+        }
+
+        string exportFEN() {
+            string newFen = "";
+            int blankSpaces = 0;
+            for (uint8_t i=0; i < 64; i++) {
+                if (_board[i] != ' ') {
+                    if (blankSpaces > 0) {
+                        newFen.push_back('0' + blankSpaces);
+                    }
+                    newFen.push_back(_board[i]);
+                    blankSpaces = 0;
+                } else {
+                    blankSpaces++;
+                }
+                if (i % 8 == 7 && i != 63){
+                    if (blankSpaces > 0) {
+                        newFen.push_back('0' + blankSpaces);
+                    }
+                    newFen.push_back('/');
+                    blankSpaces = 0;
+                }
+            }
+            
+            newFen += player == BLACK ? " b "  : " w ";
+
+            bool isCastleAvailable = false;
+            string castleString = "";
+            if (castlingRights[WHITE][0]) {
+                castleString.push_back('K');
+                isCastleAvailable = true;
+            }
+            if (castlingRights[WHITE][1]) {
+                castleString.push_back('Q');
+                isCastleAvailable = true;
+            }
+            if (castlingRights[BLACK][0]) {
+                castleString.push_back('k');
+                isCastleAvailable = true;
+            }
+            if (castlingRights[BLACK][1]) {
+                castleString.push_back('q');
+                isCastleAvailable = true;
+            }
+            if (!isCastleAvailable)
+                castleString.push_back('-');
+            
+            newFen += castleString + " ";
+            log(enPassantSquare);
+            newFen += enPassantSquare != -1 ? getNotation(enPassantSquare) : "-";
+            newFen += " ";
+
+            newFen += std::to_string(halfMoves);
+            newFen += " ";
+            newFen += std::to_string(fullMoves);
+
+            return newFen;
+        }
+
+        void makeMove(array<uint8_t, 2> move, bool changeFEN=true) {
+            // Does no validation, make sure move is psuedo legal beforehand
+            int castleRookInitialPos = -1;
+            int castleRookFinalPos = -1;
+            bool isHalfMove = _board[move[1]] == ' ';
+            
+            // Castling
+            if (tolower(_board[move[0]]) == 'k' ) {
+                if (abs(move[0] - move[1]) == 2) {
+                    if (player == WHITE) {
+                        _board[61] = _board[63];
+                        _board[61] = ' ';
+                    } else {
+                        _board[5] = _board[7];
+                        _board[7] = ' ';
+                    }
+                } else if (abs(move[0] - move[1]) == 3) {
+                    if (player == WHITE) {
+                        _board[58] = _board[56];
+                        _board[56] = ' ';
+                    } else {
+                        _board[2] = _board[0];
+                        _board[0] = ' ';
+                    }
+                }
+                castlingRights[player][0] = false;
+                castlingRights[player][1] = false;
+            }
+            
+            if (tolower(_board[move[0]]) == 'p') {
+                isHalfMove = false;
+                // En Passant
+                if (move[1] == enPassantSquare) {
+                    _board[enPassantSquare - getDirection(player) * 8] = ' ';
+                }
+                enPassantSquare = -1;
+                log(abs(move[0] - move[1]));
+                if (abs(move[0] - move[1]) / 8 == 2) {       
+                    enPassantSquare = move[1] - getDirection(player) * 8;
+                    log(enPassantSquare);
+                }
+            } else {
+                enPassantSquare = -1;
+            }
+
+            if (tolower(_board[move[0]]) == 'r') {
+                if (move[0] == 0 && player == WHITE) {
+                    castlingRights[WHITE][0] = false;
+                } else if (move[0] == 7 && player == WHITE) {
+                    castlingRights[WHITE][1] = false;
+                } else if (move[0] == 56 && player == BLACK) {
+                    castlingRights[BLACK][0] = false;
+                } else if (move[0] == 63 && player == BLACK) {
+                    castlingRights[BLACK][1] = false;
+                }
+            }
+            
+            _board[move[1]] = _board[move[0]];
+            _board[move[0]] = ' ';
+
+            if (player == BLACK) {
+                fullMoves++;
+            }
+
+            player = !player;
+            
+            if (isHalfMove) {
+                halfMoves++;
+            } else {
+                halfMoves = 0;
+            }
+
+            if (changeFEN) {
+                fen = exportFEN();
+            }
         }
 };
 
-int main(int argc, char **argv) {    
+map<uint8_t, vector<uint8_t>> convertMoves(map<uint8_t, boardType> &moves) {
+    map<uint8_t, vector<uint8_t>> finalMoves = map<uint8_t, vector<uint8_t>>();
+    for (auto itr = moves.begin(); itr != moves.end(); itr++) {
+        for (uint8_t i=0; i < 64; i++) {
+            if (itr->second[i]) {
+                finalMoves[itr->first].push_back(i);
+            }
+        }
+    }
+    return finalMoves;
+}
+
+bool isValidMove(Board &board, map<uint8_t, boardType> &moves, array<uint8_t, 2> move, preCalculation::preCalc &preCalculatedData) {
+    vector<uint8_t> availableMoves = convertMoves(moves)[move[0]];
+
+    if (std::find(availableMoves.begin(), availableMoves.end(), move[1]) == availableMoves.end()) {
+        return false;
+    }
+
+    return true;
+
+    Board newBoard(board);
+    newBoard.makeMove(move, false);
+    
+    uint8_t kingPos = newBoard.findKing(board.player);
+    map<uint8_t, boardType> enemyMoves = newBoard.getNextMoves(preCalculatedData, newBoard.player, true);
+    boardType enemyAttacks = boardType(0);
+    for (auto itr = enemyMoves.begin(); itr != enemyMoves.end(); itr++) {
+        enemyAttacks |= itr->second;
+        if (enemyAttacks[kingPos]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+map<string, string> pickFirstMove(Board &boardInstance, preCalculation::preCalc &preCalculatedData, array<uint8_t, 2> move) {
+    map<string, string> output = map<string, string>();
+    map<uint8_t, boardType> availableMoves = boardInstance.getNextMoves(preCalculatedData, boardInstance.player);
+
+    if (isValidMove(boardInstance, availableMoves, move, preCalculatedData)) {
+        boardInstance.makeMove(move);
+        map<uint8_t, boardType> compMoves = boardInstance.getNextMoves(preCalculatedData, boardInstance.player);
+        map<uint8_t, vector<uint8_t>> formattedMoves = convertMoves(compMoves);
+        array<uint8_t, 2> move = {formattedMoves.begin()->first, formattedMoves.begin()->second.at(0)};
+        boardInstance.makeMove(move);
+        output["status"] = "OK";
+    } else {
+        output["status"] = "ERR";
+    }
+    output["fen"] = boardInstance.getFen();
+    return output;
+}
+
+int main(int argc, char **argv) {
+
     json data = communicate::parseInput(argc, argv);
 
     preCalculation::preCalc preCalculatedData = preCalculation::loadJSON();
 
-    Board boardInstance = Board(data["data"]["fen"].get<string>());
+    Board boardInstance(data["data"]["fen"].get<string>());
+    array<uint8_t, 2> move = data["data"]["move"].get<array<uint8_t, 2>>();
 
-    std::map<uint8_t, boardType> moves = boardInstance.getNextMoves(preCalculatedData, boardInstance.player);
+    std::cout << communicate::output(pickFirstMove(boardInstance, preCalculatedData, move));
 
-    std::cout << communicate::output(moves);
-    
     return 0;
 }

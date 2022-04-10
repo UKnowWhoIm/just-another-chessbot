@@ -103,7 +103,18 @@
 
         socket.on("setBoardState", (fen) => setBoardState(fen));
 
-        socket.on("chessResponse", (moves) => console.log(moves));
+        socket.on("chessResponse", (data) => {
+            if (data.status !== "EXC") {
+                obj = JSON.parse(data.data);
+                console.log(obj.fen);
+                if (obj.status !== "OK") {
+                    alert("Invalid Move");
+                }
+                setBoardState(obj.fen);
+            } else {
+                alert("Internal Server Error");
+            }
+        });
 
         let disableMoves = false;
         let countDown;

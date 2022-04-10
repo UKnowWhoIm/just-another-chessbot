@@ -4,7 +4,7 @@ import logging
 from random import randint
 
 def get_uu64(positions):
-    return int("0b" + "".join([str(int(i in positions)) for i in range(64)]), 2)
+    return int("0b" + "".join([str(int(i in positions)) for i in range(63, -1, -1)]), 2)
 
 def random_uu64():
     return randint(0, 2**16 - 1) | (randint(0, 2**16 - 1) << 16) | (randint(0, 2**16 - 1) << 32) | (randint(0, 2**16 - 1) << 48)
@@ -74,9 +74,9 @@ def find_magic_for_square(origin, is_bishop):
 bishop_blockers = []
 rook_blockers = []
 
-logging.getLogger().setLevel(logging.INFO)
+# logging.getLogger().setLevel(logging.INFO)
 # Uncomment to show progress
-# logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 
 bishops = [[None for _ in range(512)] for __ in range(64)]
 rooks = [[None for _ in range(4096)] for __ in range(64)]
@@ -106,7 +106,7 @@ for i in range(64):
     rm = find_magic_for_square(i, False)
     for x in bishop_blockers[i]:
         pos = transform(get_uu64(x), bm, True)
-        bishops[i][pos] = get_attck(i, x, False)
+        bishops[i][pos] = get_attck(i, x, True)
     for y in rook_blockers[i]:
         pos = transform(get_uu64(y), rm, False)
         rooks[i][pos] = get_attck(i, y, False)
