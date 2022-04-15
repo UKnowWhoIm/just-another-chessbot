@@ -5,7 +5,7 @@
 using std::string;
 using std::vector;
 
-void log(string str) {
+void printData(string str) {
     //const auto now = std::chrono::system_clock::now();
     std::ofstream fout;
     fout.open("logs.txt", std::ios::app);
@@ -13,16 +13,16 @@ void log(string str) {
     fout.close();
 }
 
-void log(int num) {
-    log(std::to_string(num));
+void printData(long num) {
+    printData(std::to_string(num));
 }
 
 template<typename T>
-void log(vector<T> &arg) {
+void printData(vector<T> &arg) {
     std::string str = "";
 
     for (auto x: arg) {
         str += std::to_string((int)x) + ",";
     }
-    log(str);
+    printData(str);
 }
