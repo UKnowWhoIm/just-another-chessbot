@@ -6,7 +6,13 @@ using std::string;
 using std::vector;
 
 void printData(string str) {
-    //const auto now = std::chrono::system_clock::now();
+    std::ofstream fout;
+    fout.open("logs.txt", std::ios::app);
+    fout << str << std::endl;
+    fout.close();
+}
+
+void printData(char str) {
     std::ofstream fout;
     fout.open("logs.txt", std::ios::app);
     fout << str << std::endl;

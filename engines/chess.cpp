@@ -4,9 +4,6 @@
 #include<iterator>
 #include<map>
 
-#include <random>
-#include <time.h>
-
 #include "chess_core.hpp"
 
 #define MAX_SCORE 9999999
@@ -16,10 +13,6 @@ using std::string;
 using std::array;
 using std::map;
 using json = nlohmann::json;
-
-typedef std::bitset<64> boardType;
-typedef uint8_t playerType;
-typedef array<uint8_t, 2>  moveType;
 
 
 void printBoard(boardType board) {
@@ -52,7 +45,8 @@ void printBoard(Board &boardInstance) {
 
 namespace ChessBot {
     bool enableAlphaBetaPruning = true;
-    uint8_t maxDepth = 3;
+    unsigned long prunedNodes;
+    uint8_t maxDepth = 5;
     bool debug = true;
 
     unsigned long getPieceScore(char piece) {
@@ -89,45 +83,46 @@ namespace ChessBot {
         if (depth == 0) {
             return heuristic(boardInstance);
         }
-        map<uint8_t, boardType> nextMoves = boardInstance.getNextMoves(preCalcData, boardInstance.player);
+        vector<moveType> nextMoves = boardInstance.orderedNextMoves(preCalcData, boardInstance.player);
         long currentMax = MIN_SCORE;
         for (auto itr = nextMoves.begin(); itr != nextMoves.end(); itr++) {
-            for (uint8_t i = itr->second._Find_first(); i < 64; i = itr->second._Find_next(i)) {
+                moveType currentMove = *itr;
                 Board newBoard(boardInstance);
-                newBoard.makeMove({itr->first, i});
+                newBoard.makeMove(currentMove);
                 long score = -negaMax(newBoard, preCalcData, depth - 1, -beta, -alpha);
                 currentMax = score > currentMax ? score : currentMax;
                 alpha = currentMax > alpha ? currentMax : alpha;
                 if (enableAlphaBetaPruning && beta <= alpha) {
                     if (debug) {
-                        printData("Pruned node");
+                        prunedNodes++;
                     }
                     break;
                 }
-            }
         }
         return currentMax;
     }
 
     moveType getNextMove(Board &boardInstance, preCalculation::preCalc &preCalcData) {
-        map<uint8_t, boardType> nextMoves = boardInstance.getNextMoves(preCalcData, boardInstance.player);
+        vector<moveType> nextMoves = boardInstance.orderedNextMoves(preCalcData, boardInstance.player);
         if (nextMoves.size() == 0) {
             // TODO Game over
-            return {64, 64};
+            return {INVALID_POS, INVALID_POS};
         }
+        prunedNodes = 0;
         long currentMax = MIN_SCORE;
         moveType currentBestMove;
         for (auto itr = nextMoves.begin(); itr != nextMoves.end(); itr++) {
-            for (uint8_t i = itr->second._Find_first(); i < 64; i = itr->second._Find_next(i)) {
-                moveType currentMove = {itr->first, i};
-                Board newBoard(boardInstance);
-                newBoard.makeMove(currentMove);
-                long score = -negaMax(newBoard, preCalcData, maxDepth - 1);
-                if (score > currentMax) {
-                    currentBestMove = currentMove;
-                    currentMax = score;
-                }
+            moveType currentMove = *itr;
+            Board newBoard(boardInstance);
+            newBoard.makeMove(currentMove);
+            long score = -negaMax(newBoard, preCalcData, maxDepth - 1);
+            if (score > currentMax) {
+                currentBestMove = currentMove;
+                currentMax = score;
             }
+        }
+        if (debug) {
+            printData((long)prunedNodes);
         }
         return currentBestMove;
     }
@@ -151,19 +146,6 @@ namespace communicate {
     }
 }
 
-moveType pickRandomMove(map<uint8_t,boardType> allMoves) {
-    for (auto itr = allMoves.begin(); itr != allMoves.end(); itr++) {
-        if (rand() % 2) {
-            uint8_t start = itr->first;
-            for (uint8_t i=itr->second._Find_first(); i < 64; i = itr->second._Find_next(i)) {
-                if (rand() % 2)
-                    return {start, i};
-            }
-        }
-    }
-    return {allMoves.begin()->first, allMoves.begin()->second[0]};
-}
-
 map<string, string> pickFirstMove(Board &boardInstance, preCalculation::preCalc &preCalculatedData, moveType move) {
     map<string, string> output = map<string, string>();
     map<uint8_t, boardType> availableMoves = boardInstance.getNextMoves(preCalculatedData, boardInstance.player);
@@ -171,7 +153,7 @@ map<string, string> pickFirstMove(Board &boardInstance, preCalculation::preCalc 
     if (boardInstance.isValidMove(availableMoves, move, preCalculatedData)) {
         boardInstance.makeMove(move);
         moveType nextMove = ChessBot::getNextMove(boardInstance, preCalculatedData);
-        if (nextMove[0] != 64) {
+        if (nextMove[0] != INVALID_POS) {
             boardInstance.makeMove(nextMove);
         }
         output["status"] = "OK";
@@ -183,7 +165,6 @@ map<string, string> pickFirstMove(Board &boardInstance, preCalculation::preCalc 
 }
 
 int main(int argc, char **argv) {
-    srand(time(0));
     json data = communicate::parseInput(argc, argv);
 
     preCalculation::preCalc preCalculatedData = preCalculation::loadJSON();

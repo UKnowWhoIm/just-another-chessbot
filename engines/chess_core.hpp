@@ -4,6 +4,7 @@
 #include<iterator>
 #include<map>
 #include<vector>
+#include <chrono>
 
 #include "json.hpp"
 #include "log.hpp"
@@ -11,6 +12,7 @@
 
 #define BLACK 0
 #define WHITE 1
+#define INVALID_POS 64
 
 using std::string;
 using std::array;
@@ -20,6 +22,7 @@ using json = nlohmann::json;
 
 typedef std::bitset<64> boardType;
 typedef uint8_t playerType;
+typedef array<uint8_t, 2>  moveType;
 
 
 namespace preCalculation {
@@ -34,9 +37,9 @@ namespace preCalculation {
 
     preCalc loadJSON() {
         // Load the magics and blockers
-        string attacksFile = "/app/engines/chess_utils/attacks.json";
-        string magicFile = "/app/engines/chess_utils/magics.json";
-        string blockerFile = "/app/engines/chess_utils/blockers.json";
+        string attacksFile = "/app/engines/utils/attacks.json";
+        string magicFile = "/app/engines/utils/magics.json";
+        string blockerFile = "/app/engines/utils/blockers.json";
 
         json attacks, magics, blockers;
         std::ifstream aF(attacksFile), mF(magicFile), bF(blockerFile);
@@ -87,34 +90,37 @@ class Board {
             boardType allPieces = whitePieces | blackPieces;
             boardType nonCaptures = boardType(0);
             boardType captures = boardType(0);
-            boardType* enemyPieces = (player == BLACK) ? &whitePieces : &blackPieces;
+            boardType enemyPieces = (player == BLACK) ? whitePieces : blackPieces;
             
+            if (this->enPassantSquare != INVALID_POS)
+                enemyPieces.set(this->enPassantSquare);
+
             // Normal Move
             uint8_t nextMove = pos + getDirection(player) * 8;
-            if (!(allPieces[nextMove]) && nextMove >= 0 && nextMove < 64) {
+            if (!(allPieces[nextMove]) && nextMove < 64) {
                 nonCaptures.set(nextMove);
             }
-            
+
             // Double Move at initial position
             nextMove = pos + getDirection(player) * 16;
             uint8_t intermediateSquare = pos + getDirection(player) * 8;
-            if (player == BLACK && pos / 8 == 1 && !allPieces[intermediateSquare] && !allPieces[nextMove] && nextMove >= 0 && nextMove < 64) {
+            if (player == BLACK && pos / 8 == 1 && !allPieces[intermediateSquare] && !allPieces[nextMove] && nextMove < 64) {
                 nonCaptures.set(nextMove);
-            } else if (player == WHITE && pos / 8 == 6 && !allPieces[intermediateSquare] && !allPieces[nextMove] && nextMove >= 0 && nextMove < 64) {
+            } else if (player == WHITE && pos / 8 == 6 && !allPieces[intermediateSquare] && !allPieces[nextMove] && nextMove < 64) {
                 nonCaptures.set(nextMove);
             }
 
             // Capture Left
             nextMove = pos + getDirection(player) * 8 - 1;
-            if (pos % 8 != 0 && nextMove >= 0 && nextMove < 64) {
+            if (pos % 8 != 0 && nextMove < 64) {
                 captures.set(nextMove);
             }
             // Capture Right
             nextMove = pos + getDirection(player) * 8 + 1;
-            if (pos % 8 != 7 && nextMove >= 0 && nextMove < 64) {
+            if (pos % 8 != 7 && nextMove < 64) {
                 captures.set(nextMove);
             }
-            captures &= *enemyPieces;
+            captures &= enemyPieces;
             nonCaptures &= ~allPieces;
 
             return captures | nonCaptures;
@@ -122,7 +128,6 @@ class Board {
 
         boardType getKnightMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
             boardType* ownPieces = (player == BLACK) ? &blackPieces : &whitePieces;;
-            boardType* enemyPieces = (player == BLACK) ? &whitePieces : &blackPieces;
             boardType movesBoard = boardType(0);
 
             // Left Moves
@@ -173,11 +178,11 @@ class Board {
             if (pos % 8 != 0) {
                 movesBoard.set(pos - 1);
                 if (pos / 8 != 0)
-                    movesBoard.set(pos - 7);
+                    movesBoard.set(pos - 9);
                 if (pos / 8 != 7)
-                    movesBoard.set(pos + 9);
+                    movesBoard.set(pos + 7);
             }
-            
+
             if (pos % 8 != 7) {
                 movesBoard.set(pos + 1);
                 if (pos / 8 != 0)
@@ -189,12 +194,12 @@ class Board {
             return movesBoard & ~*ownPieces;
         }
 
-        uint16_t getHash(boardType board, unsigned long long magic, boardType blockerMask, bool isBishop) {
+        uint16_t getHash(boardType &board, unsigned long long magic, boardType& blockerMask, bool isBishop) {
             // Mask board with blockers to get relevant squares
-            return ((board & blockerMask).to_ullong() * magic) >> 64 - (isBishop ? 9 : 12);
+            return ((board & blockerMask).to_ullong() * magic) >> (64 - (isBishop ? 9 : 12));
         }
 
-        boardType getBishopMoves(preCalculation::preCalc data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
+        boardType getBishopMoves(preCalculation::preCalc &data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
             boardType allPieces = whitePieces | blackPieces;
             boardType* ownPieces = (player == WHITE) ? &whitePieces : &blackPieces;
             uint16_t index = getHash(allPieces, data.bishopMagic[pos], data.bishopBlockers[pos], true);
@@ -202,7 +207,7 @@ class Board {
             return allMoves & ~*ownPieces;
         }
 
-        boardType getRookMoves(preCalculation::preCalc data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
+        boardType getRookMoves(preCalculation::preCalc &data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
             boardType allPieces = whitePieces | blackPieces;
             boardType* ownPieces = (player == WHITE) ? &whitePieces : &blackPieces;
             uint16_t index = getHash(allPieces, data.rookMagic[pos], data.rookBlockers[pos], false);
@@ -210,49 +215,38 @@ class Board {
             return allMoves & ~*ownPieces;
         }
 
-        boardType getQueenMoves(preCalculation::preCalc data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
+        boardType getQueenMoves(preCalculation::preCalc &data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
             boardType* ownPieces = (player == WHITE) ? &whitePieces : &blackPieces;
             boardType queenMoves = getRookMoves(data, whitePieces, blackPieces, player, pos) | getBishopMoves(data, whitePieces, blackPieces, player, pos);
             return queenMoves & ~*ownPieces;
         }
 
-        boardType getCastlingMoves(preCalculation::preCalc &preCalculatedData, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t kingPos) {
+        boardType getCastlingMoves(preCalculation::preCalc &preCalculatedData, uint8_t kingPos, bool isLeftClear, bool isRightClear) {
             // Will check legality too, as castle can't pass through check
+
             boardType castlingMoves = boardType(0);
-            boardType allPieces = boardType(0);
-            map<uint8_t, boardType> enemyMoves = getNextMoves(preCalculatedData, !player, true);
             boardType enemyAttacks = boardType(0);
+            map<uint8_t, boardType> enemyMoves = getNextMoves(preCalculatedData, !player, true);
 
-            for (auto itr = enemyMoves.begin(); itr != enemyMoves.end(); itr++) {
+            for (auto itr = enemyMoves.begin(); itr != enemyMoves.end() && (isLeftClear || isRightClear); itr++) {
                 enemyAttacks |= itr->second;
-            }
-
-            if (!castlingRights[player][0] && !castlingRights[player][1]) {
-                return castlingMoves;
-            }
-            if (castlingRights[player][0]) {
-                bool fail = false;
-                if (allPieces[kingPos - 1] || allPieces[kingPos - 2] || allPieces[kingPos - 3]) {
-                    fail = true;
+                if (enemyAttacks[kingPos]) {
+                    // King can't be in check
+                    return boardType(0);
                 }
                 if (enemyAttacks[kingPos - 1] || enemyAttacks[kingPos - 2] || enemyAttacks[kingPos - 3]) {
-                    fail = true;
-                }
-                if (!fail) {
-                    castlingMoves.set(kingPos - 3);
+                    isLeftClear = false;
+                } 
+                if (enemyAttacks[kingPos + 1] || enemyAttacks[kingPos + 2]) {
+                    isRightClear = false;
                 }
             }
-            if (castlingRights[player][1]) {
-                bool fail = false;
-                if (allPieces[kingPos + 1] || allPieces[kingPos + 2]) {
-                    fail = true;
-                }
-                if (enemyAttacks[kingPos + 1] || enemyAttacks[kingPos + 2]) {
-                    fail = true;
-                }
-                if (!fail) {
-                    castlingMoves.set(kingPos + 2);
-                }
+
+            if (castlingRights[player][0] && isLeftClear) {
+                castlingMoves.set(kingPos - 3);
+            }
+            if (castlingRights[player][1] && isRightClear) {
+                castlingMoves.set(kingPos + 2);
             }
             return castlingMoves;
         }
@@ -288,7 +282,7 @@ class Board {
         }
 
     public:
-        short int enPassantSquare;
+        uint8_t enPassantSquare;
         bool castlingRights[2][2]; // [color][side] Queen -> 0, King -> 1
         playerType player;
         uint8_t halfMoves;
@@ -344,7 +338,7 @@ class Board {
                 enPassantSquare = parseNotation(fen.substr(i, 2));
                 i += 2;
             } else {
-                enPassantSquare = -1;
+                enPassantSquare = INVALID_POS;
                 i++; // Eat Space
             }
             halfMoves = (uint8_t) parseIntInFEN(i);
@@ -362,10 +356,15 @@ class Board {
             parseFen();
         }
 
+        bool isCapture(moveType move) {
+            return this->pieceAt(move[1]) != ' ';
+        }
+
         map<uint8_t, boardType> getNextMoves(preCalculation::preCalc &preCalculatedData, playerType player, bool quick = false) {
             // PSUEDO LEGAL ONLY, DOES NOT CHECK FOR LEGALITY
             boardType whitePieces = boardType(0), blackPieces = boardType(0);
-            uint8_t kingPos;
+            // King not found intially
+            uint8_t kingPos = INVALID_POS;
             map<uint8_t, boardType> moves = map<uint8_t, boardType>();
             vector<uint8_t> playerSquares = vector<uint8_t>();
             for (uint8_t i=0; i < 64; i++) {
@@ -396,11 +395,42 @@ class Board {
                     kingPos = *i;
                 }
             }
-            if (quick)
+            if (quick || kingPos == INVALID_POS) {
                 return moves;
-            moves[kingPos] |= getCastlingMoves(preCalculatedData, whitePieces, blackPieces, player, kingPos);
+            }
+
+            // Saves ~10us of function calling overhead if preliminary checks are done here
+            boardType allPieces = whitePieces | blackPieces;
+            bool isLeftClear = allPieces[kingPos - 1] && allPieces[kingPos - 2] && allPieces[kingPos - 3];
+            bool isRightClear = allPieces[kingPos + 1] && allPieces[kingPos + 2];
+            bool isCastlePossible = !castlingRights[player][0] && !castlingRights[player][1] && (isLeftClear || isRightClear);
+
+            if (isCastlePossible) {
+                moves[kingPos] |= getCastlingMoves(preCalculatedData, kingPos, isLeftClear, isRightClear);
+            }
             return moves;
         }
+
+        vector<moveType> orderedNextMoves(preCalculation::preCalc &preCalculatedData, playerType player) {
+            map<uint8_t, boardType> nextMoves = this->getNextMoves(preCalculatedData, player, false);
+            vector<moveType> captures;
+            vector<moveType> nonCaptures;
+
+            for (auto itr = nextMoves.begin(); itr != nextMoves.end(); itr++) {
+                for (uint8_t i = itr->second._Find_first(); i < 64; i = itr->second._Find_next(i)) {
+                    moveType currentMove = {itr->first, i};
+                    if (isCapture(currentMove)) {
+                        captures.push_back(currentMove);
+                    } else {
+                        nonCaptures.push_back(currentMove);
+                    }
+                }
+            }
+    
+            // Add non captures to end of captures
+            captures.insert(captures.end(), nonCaptures.begin(), nonCaptures.end());
+            return captures;
+        } 
 
         uint8_t findKing(playerType player) {
             char target = player == BLACK ? 'k' : 'K';
@@ -415,8 +445,8 @@ class Board {
                     return i;
                 }
             }
-            // Should never reach this
-            return -1;
+
+            return INVALID_POS;
         }
 
         string getFen() {
@@ -469,7 +499,7 @@ class Board {
                 castleString.push_back('-');
             
             newFen += castleString + " ";
-            newFen += enPassantSquare != -1 ? getNotation(enPassantSquare) : "-";
+            newFen += enPassantSquare != INVALID_POS ? getNotation(enPassantSquare) : "-";
             newFen += " ";
 
             newFen += std::to_string(halfMoves);
@@ -481,8 +511,6 @@ class Board {
 
         void makeMove(array<uint8_t, 2> move, bool changeFEN=true) {
             // Does no validation, make sure move is psuedo legal beforehand
-            int castleRookInitialPos = -1;
-            int castleRookFinalPos = -1;
             bool isHalfMove = _board[move[1]] == ' ';
             
             // Castling
@@ -514,12 +542,12 @@ class Board {
                 if (move[1] == enPassantSquare) {
                     _board[enPassantSquare - getDirection(player) * 8] = ' ';
                 }
-                enPassantSquare = -1;
+                enPassantSquare = INVALID_POS;
                 if (abs(move[0] - move[1]) / 8 == 2) {       
                     enPassantSquare = move[1] - getDirection(player) * 8;
                 }
             } else {
-                enPassantSquare = -1;
+                enPassantSquare = INVALID_POS;
             }
 
             if (tolower(_board[move[0]]) == 'r') {
@@ -565,10 +593,12 @@ class Board {
             newBoard.makeMove(move, false);
 
             uint8_t kingPos = newBoard.findKing(this->player);
-            map<uint8_t, boardType> enemyMoves = newBoard.getNextMoves(preCalculatedData, newBoard.player, true);
-            for (auto itr = enemyMoves.begin(); itr != enemyMoves.end(); itr++) {
-                if (itr->second[kingPos]) {
-                    return false;
+            if (kingPos < 64){
+                map<uint8_t, boardType> enemyMoves = newBoard.getNextMoves(preCalculatedData, newBoard.player, true);
+                for (auto itr = enemyMoves.begin(); itr != enemyMoves.end(); itr++) {
+                    if (itr->second[kingPos]) {
+                        return false;
+                    }
                 }
             }
             return true;

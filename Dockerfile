@@ -19,6 +19,6 @@ COPY . /app
 
 WORKDIR /app
 
-RUN chmod +x entrypoint.sh && chmod +x ./engines/compile.sh
+RUN chmod +x entrypoint.sh && chmod +x ./engines/compile.sh && ./engines/compile.sh
 
 CMD [ "./entrypoint.sh" ]
