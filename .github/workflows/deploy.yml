@@ -13,7 +13,7 @@ jobs:
         - name: Login to GH Container Rergistry
           env:
             CR_PAT: ${{ secrets.GCR_TOKEN }}
-          run: echo $CR_PAT | docker login ghcr.io -u UKnowWhoIm --password-stdin
+          run: docker login ghcr.io -u UKnowWhoIm --password $CR_PAT
 
         - name: Build, tag, and push the image to GH CR
           id: build-image
