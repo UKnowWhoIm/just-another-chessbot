@@ -1,5 +1,6 @@
 import logging
 import json
+import os
 from aiohttp.web import Application, Response
 import socketio
 import subprocess
@@ -40,6 +41,10 @@ async def chess_move(sid, move):
 @socket.event
 def disconnect(sid):
     redis_conn.client.delete(sid)
+    try:
+        os.remove(f"{ENGINE_PATH}/TranspositionTables/{sid}")
+    except FileNotFoundError:
+        logging.error(f"File {ENGINE_PATH}/TranspositionTables/{sid} not found")
     logging.info("Disconnect: %s", sid)
 
 

@@ -16,7 +16,7 @@ namespace logging {
         auto timeStamp = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         std::ofstream fout;
         fout.open(logFileName, std::ios::app);
-        fout << std::put_time(std::localtime(timeStamp), "%FT%T.%z") << ": " << data << std::endl;
+        fout << std::put_time(std::localtime(&timeStamp), "%FT%T%z") << ": " << data << std::endl;
         fout.close();
     }
 
