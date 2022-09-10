@@ -1,6 +1,7 @@
 #include <fstream>
 #include <memory>
 #include "definitions.hpp"
+#include "statsutil.hpp"
 
 
 class HashEntry {
@@ -14,15 +15,16 @@ class HashEntry {
 
         HashEntry() {
             isAncient = true;
-            depth = -1;
+            depth = 0;
         }
 
-        HashEntry(unsigned long long &hash, unsigned long &gameId, uint8_t &depth, bool &isBeta, moveType &bestMove) {
+        HashEntry(unsigned long long hash, uint8_t depth, unsigned long score, bool isBeta, moveType bestMove) {
             this->zobristHash = hash;
             this->isAncient = false;
             this->depth = depth;
             this->isBetaCutOff = isBeta;
             this->bestMove = bestMove;
+            this->score = score;
         }
 
         HashEntry(const HashEntry& other) {
@@ -31,9 +33,10 @@ class HashEntry {
             this->depth = other.depth;
             this->isBetaCutOff = other.isBetaCutOff;
             this->bestMove = other.bestMove;
+            this->score = other.score;
         }
 
-        bool replaceHash(HashEntry &newHash) {
+        bool replaceHash(const HashEntry &newHash) {
             if(!this->isAncient)
                 // This hash is not old
                 return false;
@@ -96,6 +99,13 @@ class TranspositionTable {
             loadCache();
         }
 
+        TranspositionTable() {
+            // Empty tables used when TT is disabled
+            cache = std::vector<HashEntry>();
+            cache.shrink_to_fit();
+            isLoaded = false;
+        }
+
         void loadCache() {
             string cachePath = cacheRoot + gameId;
             std::ifstream cacheFile(cachePath);
@@ -111,20 +121,32 @@ class TranspositionTable {
         }
 
         std::shared_ptr<HashEntry> get(const unsigned long long &zobristVal) {
+            if (!isLoaded) {
+                return std::shared_ptr<HashEntry>(nullptr);
+            }
             std::shared_ptr<HashEntry> entry = std::make_shared<HashEntry>(cache[zobristVal % CACHE_SIZE]);
             if (entry->zobristHash == zobristVal) {
+                entry->looked();
                 return entry;
             }
+            stats::missTT();
             return nullptr;
         }
 
-        void set(const unsigned long long &zobristVal, const std::shared_ptr<HashEntry> &entry) {
-            if (cache[zobristVal % CACHE_SIZE].replaceHash(*entry)) {
-                cache[zobristVal % CACHE_SIZE] = *entry;
+        void set(const HashEntry &entry) {
+            if (!isLoaded) {
+                return;
+            }
+            if (cache[entry.zobristHash % CACHE_SIZE].replaceHash(entry)) {
+                stats::insertTT();
+                cache[entry.zobristHash % CACHE_SIZE] = entry;
             }
         }
 
         void dumpCache() {
+            if (!isLoaded) {
+                return;
+            }
             string cachePath = cacheRoot + gameId;
             std::ofstream cacheFile(cachePath);
             if (cacheFile.is_open()) {
@@ -137,6 +159,15 @@ class TranspositionTable {
 
         bool isCacheLoaded() {
             return isLoaded;
+        }
+
+        void resetAge() {
+            if (!isLoaded) {
+                return;
+            }
+            for (auto i = cache.begin(); i != cache.end(); i++) {
+                i->isAncient = true;
+            }
         }
 };
 

@@ -530,7 +530,7 @@ string Board::exportFEN() {
     return newFen;
 }
 
-void Board::makeMove(array<uint8_t, 2> move, prnType &PRN, bool isComputer, bool changeFEN) {
+void Board::makeMove(moveType move, prnType &PRN, bool isComputer, bool changeFEN) {
     // Does no validation, make sure move is psuedo legal beforehand
     bool isHalfMove = _board[move[1]] == ' ';
     bool isPromotion = false;
@@ -635,9 +635,9 @@ void Board::makeMove(array<uint8_t, 2> move, prnType &PRN, bool isComputer, bool
     unsigned long long prevHash = zobristHash;
     calcZobristHash(PRN);
     if (prevHash != zobristHash) {
-        logging::printData((long)move[0]);
-        logging::printData((long)move[1]);
-        logging::printData("FUCKED");
+        logging::v("ZobristError", move[0]);
+        logging::v("ZobristError", move[1]);
+        logging::v("ZobristError", "FUCKED");
     }
 }
 

@@ -28,7 +28,7 @@ jobs:
             echo "::set-output name=image::$IMAGE_NAME:$IMAGE_TAG"
 
         - name: Deploy To EC2
-          uses: appleboy/ssh-action@master
+          uses: appleboy/ssh-action@v0.1.5
           with:
             host: ${{ secrets.AWS_EC2_HOST }}
             username: ${{ secrets.AWS_EC2_USER }}
@@ -37,4 +37,4 @@ jobs:
             script: |
               echo $GCR_PAT | docker login ghcr.io -u UKnowWhoIm --password-stdin
               docker pull ghcr.io/uknowwhoim/chess:latest
-              ./launch_container ghcr.io/uknowwhoim/chess:latest chess.env chess_bot
+              ./launch_container ghcr.io/uknowwhoim/chess:latest chess.env chess-bot

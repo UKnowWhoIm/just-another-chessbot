@@ -4,6 +4,7 @@
 #include "board.cpp"
 #include "log.hpp"
 #include "transpositionTables.hpp"
+#include "statsutil.hpp"
 
 using std::string;
 using std::array;
@@ -11,7 +12,7 @@ using std::map;
 
 
 void printBoard(boardType board) {
-    logging::printData("");
+    logging::d("", "");
     string str = "";
     for (int i=0; i < 64;i++) {
         str += std::to_string(board[i]) + " ";
@@ -19,12 +20,12 @@ void printBoard(boardType board) {
             str += "\n";
         }
     }
-    logging::printData(str);
-    logging::printData("");
+    logging::d("ChessBoard", str);
+    logging::d("", "");
 }
 
 void printBoard(Board &boardInstance) {
-    logging::printData("");
+    logging::d("", "");
     string str = "";
     for (int i=0; i < 64;i++) {
         str += boardInstance.pieceAt(i);
@@ -33,16 +34,29 @@ void printBoard(Board &boardInstance) {
             str += "\n";
         }
     }
-    logging::printData(str);
-    logging::printData("");
+    logging::d("ChessBoard", str);
+    logging::d("", "");
 }
 
 
 namespace ChessBot {
     bool enableAlphaBetaPruning = true;
-    unsigned long prunedNodes;
-    uint8_t maxDepth = 5;
-    bool debug = false;
+    bool enableTT = true;
+    const uint8_t maxDepth = 6;
+    array<bool, maxDepth> depthTTFlags;
+
+    void setTTAncientForDepth(ttType transpositionTable, uint8_t depth) {
+        if (!depthTTFlags[depth]) {
+            depthTTFlags[depth] = true;
+            transpositionTable->resetAge();
+        }
+    }
+
+    void resetDepthTTFlags() {
+        for (int i=0; i < maxDepth; i++) {
+            depthTTFlags[i] = false;
+        }
+    }
 
     unsigned long getPieceScore(char piece) {
         switch (tolower(piece)) {
@@ -63,6 +77,7 @@ namespace ChessBot {
     }
 
     long heuristic(Board &boardInstance) {
+        stats::heruistic();
         long score = 0;
         for (int i=0; i < 64; i++) {
             char piece = boardInstance.pieceAt(i);
@@ -78,35 +93,42 @@ namespace ChessBot {
         if (depth == 0) {
             return heuristic(boardInstance);
         }
+        setTTAncientForDepth(transpositionTable, depth);
         std::shared_ptr<HashEntry> ttEntry = transpositionTable->get(boardInstance.getZobristHash());
         if (ttEntry != nullptr) {
             if (ttEntry->depth >= depth) {
                 if (!ttEntry->isBetaCutOff) {
                     // Exact
+                    stats::hitTTExact();
                     return ttEntry->score;
                 } else {
                     // Beta cutoff
+                    stats::hitTTBeta();
                     beta = beta > ttEntry->score ? ttEntry->score : beta;
                 }
-                if (alpha >= beta) {
+                if (enableAlphaBetaPruning && beta <= alpha) {
+                    stats::prune();
                     return ttEntry->score;
                 }
             }
         }
+        moveType bestMove;
         vector<moveType> nextMoves = boardInstance.orderedNextMoves(preCalcData, boardInstance.player);
         long currentMax = MIN_SCORE;
-        for (auto itr = nextMoves.begin(); itr != nextMoves.end(); itr++) {
-                moveType currentMove = *itr;
+        for (auto currentMove = nextMoves.begin(); currentMove != nextMoves.end(); currentMove++) {
                 Board newBoard(boardInstance);
-                newBoard.makeMove(currentMove, preCalcData->PRN, true);
+                newBoard.makeMove(*currentMove, preCalcData->PRN, true);
                 long score = -negaMax(newBoard, preCalcData, depth - 1, transpositionTable, -beta, -alpha);
-                currentMax = score > currentMax ? score : currentMax;
+                if (currentMax < score) {
+                    currentMax = score;
+                    bestMove = *currentMove;
+                }
                 alpha = currentMax > alpha ? currentMax : alpha;
                 if (enableAlphaBetaPruning && beta <= alpha) {
-                    if (debug) {
-                        prunedNodes++;
-                    }
-                    break;
+                    HashEntry t = HashEntry(boardInstance.getZobristHash(), depth, beta, true, *currentMove);
+                    transpositionTable->set(t);
+                    stats::prune();
+                    return beta;
                 }
         }
         return currentMax;
@@ -118,7 +140,6 @@ namespace ChessBot {
             // TODO Game over
             return {INVALID_POS, INVALID_POS};
         }
-        prunedNodes = 0;
         long currentMax = MIN_SCORE;
         moveType currentBestMove;
         for (auto itr = nextMoves.begin(); itr != nextMoves.end(); itr++) {
@@ -143,7 +164,7 @@ namespace communicate {
     };
 
     serverInput parseInput(int count, char **args) {
-        logging::printData(args[1]);
+        logging::d("Input", args[1]);
         return {
             args[1],
             args[2],
@@ -171,9 +192,15 @@ bool makeMoveIfLegal(Board &boardInstance, preCalculation::preCalcType preCalcul
 }
 
 int main(int argc, char **argv) {
+    stats::reset();
     communicate::serverInput data = communicate::parseInput(argc, argv);
-    
-    ttType cache = std::make_shared<TranspositionTable>(TranspositionTable(data.gameId));
+    ttType cache;
+    if (ChessBot::enableTT) {
+        cache = std::make_shared<TranspositionTable>(data.gameId);
+    } else {
+        cache = std::make_shared<TranspositionTable>();
+    }
+    ChessBot::resetDepthTTFlags();
     std::shared_ptr<preCalculation::preCalc> preCalculatedData = preCalculation::load();
 
     Board boardInstance(data.fen, preCalculatedData->PRN);
@@ -193,6 +220,6 @@ int main(int argc, char **argv) {
     std::cout << communicate::output(output);
 
     cache->dumpCache();
-
+    stats::printStats();
     return 0;
 }

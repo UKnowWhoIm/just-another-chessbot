@@ -19,3 +19,14 @@ services:
             interval: 5s
             timeout: 5s
             retries: 5
+
+    debug-container:
+        profiles:
+            - debug
+        build:
+            context: .
+            args:
+                - DEBUG=1
+        volumes:
+            - "./:/app"
+        command: gdb -v
