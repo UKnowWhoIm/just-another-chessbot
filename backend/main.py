@@ -7,7 +7,6 @@ from backend.redis_conn import start_connection, redis_conn
 
 ENGINE_PATH = "/app/engines"
 INITIAL_DATA = {"fen":"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"}
-
 socket = socketio.AsyncServer()
 app = Application()
 socket.attach(app)
@@ -22,23 +21,20 @@ def connect(sid, _):
 @socket.on("chessMove")
 async def chess_move(sid, move):
     logging.info("chess_move")
-    data = {"data": {
-        "fen": json.loads(redis_conn.client.get(sid).decode("utf-8"))["fen"], 
-        "move": [int(m) for m in move]
-        }
-    }
-    process = subprocess.Popen([f"{ENGINE_PATH}/chess.out", json.dumps(data)], stdout=subprocess.PIPE)
+    data = (json.loads(redis_conn.client.get(sid).decode('utf-8'))['fen'], sid, move[0], move[1])
+    logging.debug(data)
+    process = subprocess.Popen([f"{ENGINE_PATH}/chess.out", *data], stdout=subprocess.PIPE)
     out = process.communicate()[0].decode("utf-8")
 
     try:
-        data = json.loads(out)
-        logging.info(data)
-        redis_conn.client.set(sid, json.dumps({"fen": data["fen"]}))
-        await socket.emit("chessResponse", {"data": out})
-    except json.JSONDecodeError:
-        logging.info(out)
+        [status, fen] = out.split(" ", maxsplit=1)
+        redis_conn.client.set(sid, json.dumps({"fen": fen}))
+        logging.debug(out)
+        await socket.emit("chessResponse", {"data": {"fen": fen, "status": status}})
+    except ValueError:
+        logging.error(out)
         logging.error("Exception in C++ engine")
-        await socket.emit("chessResponse", {"status": "EXC"})
+        await socket.emit("chessResponse", {"data": {"status": "EXC"}})
 
 
 @socket.event
