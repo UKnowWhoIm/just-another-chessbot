@@ -9,7 +9,7 @@
 #define BLACK 0
 #define WHITE 1
 #define INVALID_POS 64
-#define CACHE_SIZE 10000
+#define CACHE_SIZE 100000
 
 typedef std::bitset<64> boardType;
 typedef uint8_t playerType;

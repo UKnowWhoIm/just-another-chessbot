@@ -39,7 +39,7 @@ void printBoard(Board &boardInstance) {
 }
 
 
-namespace ChessBot {
+namespace chessBot {
     bool enableAlphaBetaPruning = true;
     bool enableTT = true;
     const uint8_t maxDepth = 6;
@@ -97,14 +97,18 @@ namespace ChessBot {
         std::shared_ptr<HashEntry> ttEntry = transpositionTable->get(boardInstance.getZobristHash());
         if (ttEntry != nullptr) {
             if (ttEntry->depth >= depth) {
-                if (!ttEntry->isBetaCutOff) {
+                if (ttEntry->flag == TT_EXACT) {
                     // Exact
                     stats::hitTTExact();
                     return ttEntry->score;
-                } else {
+                } else if (ttEntry->flag == TT_LB) {
                     // Beta cutoff
                     stats::hitTTBeta();
                     beta = beta > ttEntry->score ? ttEntry->score : beta;
+                } else {
+                    // Alpha cutoff
+                    stats::hitTTAlpha();
+                    alpha = alpha < ttEntry->score ? ttEntry->score : alpha;
                 }
                 if (enableAlphaBetaPruning && beta <= alpha) {
                     stats::prune();
@@ -118,19 +122,25 @@ namespace ChessBot {
         for (auto currentMove = nextMoves.begin(); currentMove != nextMoves.end(); currentMove++) {
                 Board newBoard(boardInstance);
                 newBoard.makeMove(*currentMove, preCalcData->PRN, true);
-                long score = -negaMax(newBoard, preCalcData, depth - 1, transpositionTable, -beta, -alpha);
+                long score = -negaMax(newBoard, preCalcData, depth - 1, transpositionTable, -beta, -std::max(alpha, currentMax));
                 if (currentMax < score) {
                     currentMax = score;
                     bestMove = *currentMove;
                 }
-                alpha = currentMax > alpha ? currentMax : alpha;
-                if (enableAlphaBetaPruning && beta <= alpha) {
-                    HashEntry t = HashEntry(boardInstance.getZobristHash(), depth, beta, true, *currentMove);
-                    transpositionTable->set(t);
+                if (enableAlphaBetaPruning && beta <= currentMax) {
                     stats::prune();
-                    return beta;
+                    break;
                 }
         }
+        uint8_t ttFlag = TT_EXACT;
+        if (currentMax <= alpha) {
+            ttFlag = TT_UB;
+        }
+        if (currentMax >= beta) {
+            ttFlag = TT_LB;
+        }
+        HashEntry t = HashEntry(boardInstance.getZobristHash(), depth, currentMax, ttFlag, bestMove);
+        transpositionTable->set(t);
         return currentMax;
     }
 
@@ -152,6 +162,7 @@ namespace ChessBot {
                 currentMax = score;
             }
         }
+        logging::d("ChessBot", "Best move score: " + std::to_string(currentMax));
         return currentBestMove;
     }
 };
@@ -161,14 +172,20 @@ namespace communicate {
         string fen;
         string gameId;
         moveType move;
+        uint8_t maxDepth;
+        bool enableTT;
+        bool enableAlphaBetaPruning;
     };
 
     serverInput parseInput(int count, char **args) {
-        logging::d("Input", args[1]);
+        logging::d("Input", args);
         return {
             args[1],
             args[2],
-            {std::stoi(args[3]), std::stoi(args[4])}
+            {std::stoi(args[3]), std::stoi(args[4])},
+            std::stoi(args[5]),
+            std::stoi(args[6]),
+            std::stoi(args[7])
         };
     }
 
@@ -195,18 +212,19 @@ int main(int argc, char **argv) {
     stats::reset();
     communicate::serverInput data = communicate::parseInput(argc, argv);
     ttType cache;
-    if (ChessBot::enableTT) {
+    if (chessBot::enableTT) {
         cache = std::make_shared<TranspositionTable>(data.gameId);
     } else {
         cache = std::make_shared<TranspositionTable>();
     }
-    ChessBot::resetDepthTTFlags();
+    chessBot::resetDepthTTFlags();
     std::shared_ptr<preCalculation::preCalc> preCalculatedData = preCalculation::load();
 
     Board boardInstance(data.fen, preCalculatedData->PRN);
+    logging::d("Board Score", chessBot::heuristic(boardInstance));
     array<string, 2> output;
     if (makeMoveIfLegal(boardInstance, preCalculatedData, data.move)) {
-        moveType nextMove = ChessBot::getNextMove(boardInstance, preCalculatedData, cache);
+        moveType nextMove = chessBot::getNextMove(boardInstance, preCalculatedData, cache);
         if (nextMove[0] != INVALID_POS) {
             boardInstance.makeMove(nextMove, preCalculatedData->PRN);
         }

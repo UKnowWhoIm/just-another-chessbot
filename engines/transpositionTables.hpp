@@ -3,13 +3,16 @@
 #include "definitions.hpp"
 #include "statsutil.hpp"
 
+#define TT_EXACT 1
+#define TT_UB 2
+#define TT_LB 3
 
 class HashEntry {
     public:
         unsigned long long zobristHash;
-        unsigned long score;
+        long score;
         uint8_t depth;
-        bool isBetaCutOff;
+        uint8_t flag;
         bool isAncient;
         moveType bestMove;
 
@@ -18,11 +21,11 @@ class HashEntry {
             depth = 0;
         }
 
-        HashEntry(unsigned long long hash, uint8_t depth, unsigned long score, bool isBeta, moveType bestMove) {
+        HashEntry(unsigned long long hash, uint8_t depth, long score, uint8_t flag, moveType bestMove) {
             this->zobristHash = hash;
             this->isAncient = false;
             this->depth = depth;
-            this->isBetaCutOff = isBeta;
+            this->flag = flag;
             this->bestMove = bestMove;
             this->score = score;
         }
@@ -31,7 +34,7 @@ class HashEntry {
             this->zobristHash = other.zobristHash;
             this->isAncient = other.isAncient;
             this->depth = other.depth;
-            this->isBetaCutOff = other.isBetaCutOff;
+            this->flag = other.flag;
             this->bestMove = other.bestMove;
             this->score = other.score;
         }
@@ -46,15 +49,18 @@ class HashEntry {
             if(this->depth < newHash.depth)
                 // New hash searched deeper
                 return true;
-            if(!newHash.isBetaCutOff)
+            if(newHash.flag == TT_EXACT)
                 // New hash has exact value
                 return true;
-            if(!this->isBetaCutOff)
+            if(this->flag == TT_EXACT)
                 // Old hash has exact value
                 return false;
-            
-            // Both have beta cutoffs, store the 1 with lower cutoff
-            return (this->score < newHash.score);
+
+            // // Both have beta cutoffs, store the 1 with lower cutoff
+            // if (this->score != newHash.score) {
+            //     return (this->score < newHash.score);
+            // }
+            return true;
         }
 
         void looked() {
@@ -66,7 +72,7 @@ std::istream& operator>> (std::istream& is, HashEntry& hashEntry) {
     is >> hashEntry.zobristHash;
     is >> hashEntry.score;
     is >> hashEntry.depth;
-    is >> hashEntry.isBetaCutOff;
+    is >> hashEntry.flag;
     is >> hashEntry.isAncient;
     uint8_t origin, target;
     is >> origin;
@@ -79,7 +85,7 @@ std::ostream& operator<< (std::ostream& os, const HashEntry& hashEntry) {
     os << hashEntry.zobristHash;
     os << hashEntry.score;
     os << hashEntry.depth;
-    os << hashEntry.isBetaCutOff;
+    os << hashEntry.flag;
     os << hashEntry.isAncient;
     os << hashEntry.bestMove[0];
     os << hashEntry.bestMove[1];
@@ -110,11 +116,13 @@ class TranspositionTable {
             string cachePath = cacheRoot + gameId;
             std::ifstream cacheFile(cachePath);
             if (cacheFile.is_open()) {
+                logging::d("TT", "Cache file found, reading...");
                 for (int i=0; i < CACHE_SIZE; i++) {
                     cacheFile >> cache[i];
                 }
                 cacheFile.close();
             } else {
+                logging::d("TT", "Cache file not found, creating new cache");
                 cache.assign(CACHE_SIZE, HashEntry());
             }
             isLoaded = true;
@@ -171,5 +179,5 @@ class TranspositionTable {
         }
 };
 
-const string TranspositionTable::cacheRoot = "/app/engines/TranspositionTables/";
+const string TranspositionTable::cacheRoot = "/app/engines/transpositionTables/";
 typedef std::shared_ptr<TranspositionTable> ttType;

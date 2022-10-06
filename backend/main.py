@@ -22,7 +22,7 @@ def connect(sid, _):
 @socket.on("chessMove")
 async def chess_move(sid, move):
     logging.info("chess_move")
-    data = (json.loads(redis_conn.client.get(sid).decode('utf-8'))['fen'], sid, move[0], move[1])
+    data = (json.loads(redis_conn.client.get(sid).decode('utf-8'))['fen'], sid, move[0], move[1], '6', '1', '1')
     logging.debug(data)
     process = subprocess.Popen([f"{ENGINE_PATH}/chess.out", *data], stdout=subprocess.PIPE)
     out = process.communicate()[0].decode("utf-8")
@@ -42,9 +42,9 @@ async def chess_move(sid, move):
 def disconnect(sid):
     redis_conn.client.delete(sid)
     try:
-        os.remove(f"{ENGINE_PATH}/TranspositionTables/{sid}")
+        os.remove(f"{ENGINE_PATH}/transpositionTables/{sid}")
     except FileNotFoundError:
-        logging.error(f"File {ENGINE_PATH}/TranspositionTables/{sid} not found")
+        logging.error(f"File {ENGINE_PATH}/transpositionTables/{sid} not found")
     logging.info("Disconnect: %s", sid)
 
 
