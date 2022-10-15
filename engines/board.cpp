@@ -20,7 +20,7 @@ short int Board::getDirection(playerType player) {
     return player == WHITE ? -1 : 1;
 }
 
-boardType Board::getPawnMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
+boardType Board::getPawnMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea) {
     boardType allPieces = whitePieces | blackPieces;
     boardType nonCaptures = boardType(0);
     boardType captures = boardType(0);
@@ -54,13 +54,15 @@ boardType Board::getPawnMoves(boardType &whitePieces, boardType &blackPieces, pl
     if (pos % 8 != 7 && nextMove < 64) {
         captures.set(nextMove);
     }
+    if (isAttackArea) {
+        return captures;
+    }
     captures &= enemyPieces;
     nonCaptures &= ~allPieces;
-
     return captures | nonCaptures;
 }
 
-boardType Board::getKnightMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
+boardType Board::getKnightMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea) {
     boardType* ownPieces = (player == BLACK) ? &blackPieces : &whitePieces;;
     boardType movesBoard = boardType(0);
 
@@ -93,13 +95,15 @@ boardType Board::getKnightMoves(boardType &whitePieces, boardType &blackPieces, 
                 movesBoard.set(pos - 6);
         }
     }
-    // Remove capturing own piece
+    if (isAttackArea) {
+        return movesBoard;
+    }    
     movesBoard &= ~*ownPieces;
     
     return movesBoard;
 }
 
-boardType Board::getKingMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
+boardType Board::getKingMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea) {
     // DOES NOT INCLUDE CASTLING
     boardType* ownPieces = (player == BLACK) ? &blackPieces : &whitePieces;
     boardType movesBoard = boardType(0);
@@ -124,7 +128,9 @@ boardType Board::getKingMoves(boardType &whitePieces, boardType &blackPieces, pl
         if (pos / 8 != 7)
             movesBoard.set(pos + 9);
     }
-
+    if (isAttackArea) {
+        return movesBoard;
+    }
     return movesBoard & ~*ownPieces;
 }
 
@@ -133,26 +139,30 @@ uint16_t Board::getMagicHash(boardType &board, unsigned long long magic, boardTy
     return ((board & blockerMask).to_ullong() * magic) >> (64 - (isBishop ? 9 : 12));
 }
 
-boardType Board::getBishopMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
+boardType Board::getBishopMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea) {
     boardType allPieces = whitePieces | blackPieces;
     boardType* ownPieces = (player == WHITE) ? &whitePieces : &blackPieces;
     uint16_t index = getMagicHash(allPieces, data->bishopMagic[pos], data->bishopBlockers[pos], true);
     boardType allMoves = data->bishopLookup[pos][index];
+    if (isAttackArea) {
+        return allMoves;
+    }
     return allMoves & ~*ownPieces;
 }
 
-boardType Board::getRookMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
+boardType Board::getRookMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea) {
     boardType allPieces = whitePieces | blackPieces;
     boardType* ownPieces = (player == WHITE) ? &whitePieces : &blackPieces;
     uint16_t index = getMagicHash(allPieces, data->rookMagic[pos], data->rookBlockers[pos], false);
     boardType allMoves = data->rookLookup[pos][index];
+    if (isAttackArea) {
+        return allMoves;
+    }
     return allMoves & ~*ownPieces;
 }
 
-boardType Board::getQueenMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos) {
-    boardType* ownPieces = (player == WHITE) ? &whitePieces : &blackPieces;
-    boardType queenMoves = getRookMoves(data, whitePieces, blackPieces, player, pos) | getBishopMoves(data, whitePieces, blackPieces, player, pos);
-    return queenMoves & ~*ownPieces;
+boardType Board::getQueenMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea) {
+    return getRookMoves(data, whitePieces, blackPieces, player, pos, isAttackArea) | getBishopMoves(data, whitePieces, blackPieces, player, pos, isAttackArea);
 }
 
 boardType Board::getCastlingMoves(preCalculation::preCalcType preCalculatedData, uint8_t kingPos, bool isLeftClear, bool isRightClear) {
@@ -369,12 +379,46 @@ map<uint8_t, boardType> Board::getNextMoves(preCalculation::preCalcType preCalcu
     boardType allPieces = whitePieces | blackPieces;
     bool isLeftClear = allPieces[kingPos - 1] && allPieces[kingPos - 2] && allPieces[kingPos - 3];
     bool isRightClear = allPieces[kingPos + 1] && allPieces[kingPos + 2];
-    bool isCastlePossible = !castlingRights[player][0] && !castlingRights[player][1] && (isLeftClear || isRightClear);
+    bool isCastlePossible = !castlingRights[player][0] && !castlingRights[player][1] 
+        && (player == WHITE && kingPos == 4 || player == BLACK && kingPos == 60)
+        && (isLeftClear || isRightClear);
 
     if (isCastlePossible) {
         moves[kingPos] |= getCastlingMoves(preCalculatedData, kingPos, isLeftClear, isRightClear);
     }
     return moves;
+}
+
+boardType Board::getAttackArea(preCalculation::preCalcType preCalculatedData, playerType player) {
+    boardType whitePieces = boardType(0), blackPieces = boardType(0), attackArea = boardType(0);
+    vector<uint8_t> playerSquares = vector<uint8_t>();
+    for (uint8_t i=0; i < 64; i++) {
+        if (_board[i] == ' ')
+            continue;
+        if (getPlayer(_board[i]) == WHITE)
+            whitePieces.set(i);
+        else
+            blackPieces.set(i);
+        if (getPlayer(_board[i]) == player)
+            playerSquares.push_back(i);
+    }
+    for (auto &square: playerSquares) {
+        char piece = tolower(_board[square]);
+        if (piece == 'p') {
+           attackArea |= getPawnMoves(whitePieces, blackPieces, player, square, true);
+        } else if (piece == 'n') {
+            attackArea |= getKnightMoves(whitePieces, blackPieces, player, square, true);
+        } else if (piece == 'b') {
+            attackArea |= getBishopMoves(preCalculatedData, whitePieces, blackPieces, player, square, true);
+        } else if (piece == 'r') {
+            attackArea |= getRookMoves(preCalculatedData, whitePieces, blackPieces, player, square, true);
+        } else if (piece == 'q') {
+            attackArea |= getQueenMoves(preCalculatedData, whitePieces, blackPieces, player, square, true);
+        } else if (piece == 'k') {
+            attackArea |= getKingMoves(whitePieces, blackPieces, player, square, true);
+        }
+    }
+    return attackArea;
 }
 
 vector<moveType> Board::orderedNextMoves(preCalculation::preCalcType preCalculatedData, playerType player) {

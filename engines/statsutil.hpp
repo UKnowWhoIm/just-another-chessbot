@@ -14,6 +14,7 @@ namespace stats {
     unsigned long ttMisses;
     unsigned long ttCollisions;
     unsigned long ttInserts;
+    unsigned long ttExactInconsistent;
 
     std::chrono::_V2::system_clock::time_point startTime;
 
@@ -28,6 +29,7 @@ namespace stats {
         logging::i("TT Misses: ", ttMisses);
         logging::i("TT Collisions: ", ttCollisions);
         logging::i("TT Inserts: ", ttInserts);
+        logging::i("TT Exact Inconsistent", ttExactInconsistent);
     }
 
     void hitTTExact() {
@@ -72,6 +74,7 @@ namespace stats {
         ttMisses = 0;
         ttCollisions = 0;
         ttInserts = 0;
+        ttExactInconsistent = 0;
     }
 }
 

@@ -30,15 +30,6 @@ class HashEntry {
             this->score = score;
         }
 
-        HashEntry(const HashEntry& other) {
-            this->zobristHash = other.zobristHash;
-            this->isAncient = other.isAncient;
-            this->depth = other.depth;
-            this->flag = other.flag;
-            this->bestMove = other.bestMove;
-            this->score = other.score;
-        }
-
         bool replaceHash(const HashEntry &newHash) {
             if(!this->isAncient)
                 // This hash is not old
@@ -49,18 +40,17 @@ class HashEntry {
             if(this->depth < newHash.depth)
                 // New hash searched deeper
                 return true;
-            if(newHash.flag == TT_EXACT)
+            if(newHash.flag == TT_EXACT && this->flag != TT_EXACT)
                 // New hash has exact value
                 return true;
-            if(this->flag == TT_EXACT)
+            if(this->flag == TT_EXACT && newHash.flag != TT_EXACT)
                 // Old hash has exact value
                 return false;
 
-            // // Both have beta cutoffs, store the 1 with lower cutoff
-            // if (this->score != newHash.score) {
-            //     return (this->score < newHash.score);
-            // }
-            return true;
+            if (this->score != newHash.score && newHash.flag != TT_LB && this->flag != TT_LB) {
+                return this->score < newHash.score;
+            }
+            return this->score > newHash.score;
         }
 
         void looked() {
@@ -148,6 +138,8 @@ class TranspositionTable {
             if (cache[entry.zobristHash % CACHE_SIZE].replaceHash(entry)) {
                 stats::insertTT();
                 cache[entry.zobristHash % CACHE_SIZE] = entry;
+            } else {
+                stats::collisionTT();
             }
         }
 

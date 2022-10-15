@@ -42,7 +42,7 @@ void printBoard(Board &boardInstance) {
 namespace chessBot {
     bool enableAlphaBetaPruning = true;
     bool enableTT = true;
-    const uint8_t maxDepth = 6;
+    const uint8_t maxDepth = 5;
     array<bool, maxDepth> depthTTFlags;
 
     void setTTAncientForDepth(ttType transpositionTable, uint8_t depth) {
@@ -76,70 +76,100 @@ namespace chessBot {
         return 0;
     }
 
-    long heuristic(Board &boardInstance) {
+    long heuristic(Board &boardInstance, preCalculation::preCalcType &preCalcData) {
         stats::heruistic();
         long score = 0;
+        float attackMultiplier = 10;
+        float defenceMultiplier = 8;
+        float spaceMultiplier = 3;
+        boardType playerPieces = boardType(0), enemyPieces = boardType(0);
         for (int i=0; i < 64; i++) {
             char piece = boardInstance.pieceAt(i);
             if (piece == ' ')
                 continue;
-            short int multiplier = Board::getPlayer(piece) == boardInstance.player ? 1 : -1;
-            score += multiplier * getPieceScore(piece);
+            if (Board::getPlayer(piece) == boardInstance.player) {
+                playerPieces.set(i);
+                score += getPieceScore(piece);
+            } else {
+                enemyPieces.set(i);
+                score -= getPieceScore(piece);
+            }
         }
+        boardType playerAttacks = boardInstance.getAttackArea(preCalcData, boardInstance.player);
+        boardType enemyAttacks = boardInstance.getAttackArea(preCalcData, !boardInstance.player);
+        score += (playerAttacks & enemyPieces).count() * attackMultiplier;
+        score += (playerAttacks & playerPieces).count() * defenceMultiplier;
+        score -= (enemyAttacks & enemyPieces).count() * defenceMultiplier;
+        score -= (enemyAttacks & playerPieces).count() * attackMultiplier;
+
+        score += (playerAttacks & ~(playerPieces | enemyPieces)).count() * spaceMultiplier;
         return score;
     }
 
     long negaMax(Board &boardInstance, preCalculation::preCalcType preCalcData, uint8_t depth, ttType transpositionTable, long alpha = MIN_SCORE, long beta = MAX_SCORE) {
         if (depth == 0) {
-            return heuristic(boardInstance);
+            return heuristic(boardInstance, preCalcData);
         }
         setTTAncientForDepth(transpositionTable, depth);
+        long currentMax = MIN_SCORE;
+        long oldAlpha = alpha;
+        moveType bestMove;
         std::shared_ptr<HashEntry> ttEntry = transpositionTable->get(boardInstance.getZobristHash());
         if (ttEntry != nullptr) {
-            if (ttEntry->depth >= depth) {
+            if (ttEntry->depth == depth) {
                 if (ttEntry->flag == TT_EXACT) {
                     // Exact
                     stats::hitTTExact();
-                    return ttEntry->score;
+                    // TODO: Fix this fucker
+                    // return ttEntry->score;
+                    // Board newBoard(boardInstance);
+                    // newBoard.makeMove(ttEntry->bestMove, preCalcData->PRN, true);
+                    // long score = -negaMax(newBoard, preCalcData, depth - 1, transpositionTable, -beta, -alpha);
+                    // if (score != ttEntry->score) {
+                    //     stats::ttExactInconsistent++;
+                    // }
+                    // return score;
                 } else if (ttEntry->flag == TT_LB) {
-                    // Beta cutoff
-                    stats::hitTTBeta();
-                    beta = beta > ttEntry->score ? ttEntry->score : beta;
-                } else {
                     // Alpha cutoff
                     stats::hitTTAlpha();
-                    alpha = alpha < ttEntry->score ? ttEntry->score : alpha;
+                    alpha = std::max(alpha, ttEntry->score);
+                } else if (ttEntry->flag == TT_UB) {
+                    // Beta cutoff
+                    stats::hitTTBeta();
+                    beta = std::min(beta, ttEntry->score);
+                } else {
+                    logging::e("TT", "Invalid flag");
                 }
                 if (enableAlphaBetaPruning && beta <= alpha) {
                     stats::prune();
                     return ttEntry->score;
                 }
+            } else {
+
             }
         }
-        moveType bestMove;
         vector<moveType> nextMoves = boardInstance.orderedNextMoves(preCalcData, boardInstance.player);
-        long currentMax = MIN_SCORE;
         for (auto currentMove = nextMoves.begin(); currentMove != nextMoves.end(); currentMove++) {
-                Board newBoard(boardInstance);
-                newBoard.makeMove(*currentMove, preCalcData->PRN, true);
-                long score = -negaMax(newBoard, preCalcData, depth - 1, transpositionTable, -beta, -std::max(alpha, currentMax));
-                if (currentMax < score) {
-                    currentMax = score;
-                    bestMove = *currentMove;
-                }
+            Board newBoard(boardInstance);
+            newBoard.makeMove(*currentMove, preCalcData->PRN, true);
+            long score = -negaMax(newBoard, preCalcData, depth - 1, transpositionTable, -beta, -alpha);
+            if (currentMax < score) {
+                currentMax = score;
+                alpha = std::max(alpha, currentMax);
+                bestMove = *currentMove;
                 if (enableAlphaBetaPruning && beta <= currentMax) {
                     stats::prune();
                     break;
                 }
+            }
         }
         uint8_t ttFlag = TT_EXACT;
-        if (currentMax <= alpha) {
+        if (currentMax <= oldAlpha) {
             ttFlag = TT_UB;
-        }
-        if (currentMax >= beta) {
+        } else if (currentMax >= beta) {
             ttFlag = TT_LB;
         }
-        HashEntry t = HashEntry(boardInstance.getZobristHash(), depth, currentMax, ttFlag, bestMove);
+        HashEntry t(boardInstance.getZobristHash(), depth, currentMax, ttFlag, bestMove);
         transpositionTable->set(t);
         return currentMax;
     }
@@ -152,13 +182,12 @@ namespace chessBot {
         }
         long currentMax = MIN_SCORE;
         moveType currentBestMove;
-        for (auto itr = nextMoves.begin(); itr != nextMoves.end(); itr++) {
-            moveType currentMove = *itr;
+        for (auto currentMove = nextMoves.begin(); currentMove != nextMoves.end(); currentMove++) {
             Board newBoard(boardInstance);
-            newBoard.makeMove(currentMove, preCalcData->PRN, true);
-            long score = -negaMax(newBoard, preCalcData, maxDepth - 1, transpositionTable);
+            newBoard.makeMove(*currentMove, preCalcData->PRN, true);
+            long score = -negaMax(newBoard, preCalcData, maxDepth - 1, transpositionTable, currentMax);
             if (score > currentMax) {
-                currentBestMove = currentMove;
+                currentBestMove = *currentMove;
                 currentMax = score;
             }
         }
@@ -221,7 +250,6 @@ int main(int argc, char **argv) {
     std::shared_ptr<preCalculation::preCalc> preCalculatedData = preCalculation::load();
 
     Board boardInstance(data.fen, preCalculatedData->PRN);
-    logging::d("Board Score", chessBot::heuristic(boardInstance));
     array<string, 2> output;
     if (makeMoveIfLegal(boardInstance, preCalculatedData, data.move)) {
         moveType nextMove = chessBot::getNextMove(boardInstance, preCalculatedData, cache);

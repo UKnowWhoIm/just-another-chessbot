@@ -20,19 +20,19 @@ class Board {
 
         short int getDirection(playerType player);
 
-        boardType getPawnMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos);
+        boardType getPawnMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea = false);
 
-        boardType getKnightMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos);
+        boardType getKnightMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea = false);
 
-        boardType getKingMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos);
+        boardType getKingMoves(boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea = false);
 
         uint16_t getMagicHash(boardType &board, unsigned long long magic, boardType& blockerMask, bool isBishop);
 
-        boardType getBishopMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos);
+        boardType getBishopMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea = false);
 
-        boardType getRookMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos);
+        boardType getRookMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea = false);
 
-        boardType getQueenMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos);
+        boardType getQueenMoves(preCalculation::preCalcType data, boardType &whitePieces, boardType &blackPieces, playerType player, uint8_t pos, bool isAttackArea = false);
 
         boardType getCastlingMoves(preCalculation::preCalcType preCalculatedData, uint8_t kingPos, bool isLeftClear, bool isRightClear);
 
@@ -55,6 +55,8 @@ class Board {
         playerType player;
         uint8_t halfMoves;
         uint16_t fullMoves;
+
+        boardType getPiecesOfPlayer(playerType player);
 
         static uint8_t parseNotation(string notation);
 
@@ -87,6 +89,8 @@ class Board {
         bool isCapture(moveType move);
 
         map<uint8_t, boardType> getNextMoves(preCalculation::preCalcType preCalculatedData, playerType player, bool quick = false);
+
+        boardType getAttackArea(preCalculation::preCalcType preCalculatedData, playerType player);
 
         vector<moveType> orderedNextMoves(preCalculation::preCalcType preCalculatedData, playerType player);
         
