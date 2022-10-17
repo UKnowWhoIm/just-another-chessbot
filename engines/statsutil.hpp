@@ -16,6 +16,16 @@ namespace stats {
     unsigned long ttInserts;
     unsigned long ttExactInconsistent;
 
+    unsigned long pvNullWindowSuccess;
+    unsigned long pvNullWindowFail;
+
+    unsigned long nullMovePruned;
+    unsigned long nullMoveNotPruned;
+
+    unsigned long illegalKingCapturePrune;
+
+    unsigned long qSearchCount;
+
     std::chrono::_V2::system_clock::time_point startTime;
 
     void printStats() {
@@ -23,6 +33,7 @@ namespace stats {
         logging::i("Elapsed time(s): ", std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count());
         logging::i("Prune count: ", pruneCount);
         logging::i("Heruistic count: ", heruisticCount);
+        logging::i("QSearch Count: ", qSearchCount);
         logging::i("TT Exact Hits: ", ttExactHits);
         logging::i("TT Alpha Hits: ", ttAlphaHits);
         logging::i("TT Beta Hits: ", ttBetaHits);
@@ -30,6 +41,11 @@ namespace stats {
         logging::i("TT Collisions: ", ttCollisions);
         logging::i("TT Inserts: ", ttInserts);
         logging::i("TT Exact Inconsistent", ttExactInconsistent);
+        logging::i("PV Null Window Success: ", pvNullWindowSuccess);
+        logging::i("PV Null Window Fail: ", pvNullWindowFail);
+        logging::i("Null Move Pruned: ", nullMovePruned);
+        logging::i("Null Move Not Pruned: ", nullMoveNotPruned);
+        logging::i("Illegal King Capture Prune: ", illegalKingCapturePrune);
     }
 
     void hitTTExact() {
@@ -64,6 +80,31 @@ namespace stats {
         heruisticCount++;
     }
 
+    void pvZWSSuccess() {
+        pvNullWindowSuccess++;
+    }
+
+    void pvZWSFail() {
+        pvNullWindowFail++;
+    }
+
+    void nullMovePrune() {
+        nullMovePruned++;
+    }
+
+    void nullMoveNotPrune() {
+        nullMoveNotPruned++;
+    }
+
+    void illegalKingCapture() {
+        illegalKingCapturePrune++;
+    }
+
+    void quiescenceSearch() {
+        qSearchCount++;
+    }
+
+
     void reset() {
         startTime = std::chrono::system_clock::now();
         pruneCount = 0;
@@ -75,6 +116,9 @@ namespace stats {
         ttCollisions = 0;
         ttInserts = 0;
         ttExactInconsistent = 0;
+        pvNullWindowSuccess = 0;
+        pvNullWindowFail = 0;
+        illegalKingCapturePrune = 0;
     }
 }
 

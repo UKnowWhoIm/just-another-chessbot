@@ -685,6 +685,22 @@ void Board::makeMove(moveType move, prnType &PRN, bool isComputer, bool changeFE
     }
 }
 
+void Board::makeMove(const string& move, prnType &PRN, bool isComputer, bool changeFEN) {
+    // Make move in chess notation
+    moveType moveType = {parseNotation(move.substr(0, 2)), parseNotation(move.substr(2, 2))};
+    makeMove(moveType, PRN, isComputer, changeFEN);
+}
+
+bool Board::isInCheck(preCalculation::preCalcType &preCalc, playerType player) {
+    // Check if player is in check
+    uint8_t kingPos = findKing(player);
+    if (kingPos == INVALID_POS) {
+        logging::e("KingError", "King not found");
+        return false;
+    }
+    return getAttackArea(preCalc, !player).test(kingPos);
+}
+
 bool Board::isValidMove(map<uint8_t, boardType> &moves, array<uint8_t, 2> move, preCalculation::preCalcType preCalculatedData) {
     boardType availableMoves = moves[move[0]];
 

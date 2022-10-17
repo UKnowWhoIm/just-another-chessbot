@@ -5,6 +5,7 @@
 #include<array>
 
 #define MAX_SCORE 9999999
+#define INTERRUPTED_SCORE 99999990
 #define MIN_SCORE -9999999
 #define BLACK 0
 #define WHITE 1

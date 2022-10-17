@@ -2,3 +2,4 @@ redis
 python-socketio
 aiohttp
 gunicorn
+chess

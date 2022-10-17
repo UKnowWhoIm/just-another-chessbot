@@ -88,6 +88,8 @@ class Board {
 
         bool isCapture(moveType move);
 
+        bool isInCheck(preCalculation::preCalcType& preCalculatedData, playerType player);
+
         map<uint8_t, boardType> getNextMoves(preCalculation::preCalcType preCalculatedData, playerType player, bool quick = false);
 
         boardType getAttackArea(preCalculation::preCalcType preCalculatedData, playerType player);
@@ -99,6 +101,8 @@ class Board {
         string exportFEN();
 
         void makeMove(array<uint8_t, 2> move, prnType &PRN, bool isComputer=false, bool changeFEN=true);
+
+        void makeMove(const string& move, prnType &PRN, bool isComputer=false, bool changeFEN=true);
 
         bool isValidMove(map<uint8_t, boardType> &moves, array<uint8_t, 2> move, preCalculation::preCalcType preCalculatedData);
 

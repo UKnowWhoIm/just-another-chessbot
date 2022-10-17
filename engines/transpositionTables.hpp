@@ -118,6 +118,10 @@ class TranspositionTable {
             isLoaded = true;
         }
 
+        void clear() {
+            cache.assign(CACHE_SIZE, HashEntry());
+        }
+
         std::shared_ptr<HashEntry> get(const unsigned long long &zobristVal) {
             if (!isLoaded) {
                 return std::shared_ptr<HashEntry>(nullptr);
