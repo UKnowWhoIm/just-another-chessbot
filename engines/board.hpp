@@ -1,5 +1,5 @@
-#ifndef CHESS_BOARD
-#define CHESS_BOARD 1
+#ifndef CHESS_BOARD_H
+#define CHESS_BOARD_H 1
 
 #include<string>
 #include<map>
@@ -103,6 +103,10 @@ class Board {
         void makeMove(array<uint8_t, 2> move, prnType &PRN, bool isComputer=false, bool changeFEN=true);
 
         void makeMove(const string& move, prnType &PRN, bool isComputer=false, bool changeFEN=true);
+
+        bool makeMoveIfLegal(preCalculation::preCalcType preCalculatedData, moveType move);
+
+        bool makeMoveIfLegal(preCalculation::preCalcType preCalculatedData, const string& move);
 
         bool isValidMove(map<uint8_t, boardType> &moves, array<uint8_t, 2> move, preCalculation::preCalcType preCalculatedData);
 

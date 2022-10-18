@@ -1,3 +1,5 @@
+#ifndef CHESS_TT_H
+#define CHESS_TT_H 1
 #include <fstream>
 #include <memory>
 #include "definitions.hpp"
@@ -177,3 +179,4 @@ class TranspositionTable {
 
 const string TranspositionTable::cacheRoot = "/app/engines/transpositionTables/";
 typedef std::shared_ptr<TranspositionTable> ttType;
+#endif

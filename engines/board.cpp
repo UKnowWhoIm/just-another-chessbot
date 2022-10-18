@@ -1,3 +1,5 @@
+#ifndef CHESS_BOARD_IMPL_H
+#define CHESS_BOARD_IMPL_H 1
 #include<fstream>
 #include<string>
 #include<bitset>
@@ -6,10 +8,10 @@
 #include<vector>
 #include<chrono>
 
-#include "definitions.hpp"
-#include "preCalculation.hpp"
 #include "board.hpp"
+#include "definitions.hpp"
 #include "log.hpp"
+#include "preCalculation.hpp"
 
 using std::string;
 using std::array;
@@ -687,8 +689,22 @@ void Board::makeMove(moveType move, prnType &PRN, bool isComputer, bool changeFE
 
 void Board::makeMove(const string& move, prnType &PRN, bool isComputer, bool changeFEN) {
     // Make move in chess notation
-    moveType moveType = {parseNotation(move.substr(0, 2)), parseNotation(move.substr(2, 2))};
-    makeMove(moveType, PRN, isComputer, changeFEN);
+    moveType moveRaw = {parseNotation(move.substr(0, 2)), parseNotation(move.substr(2, 2))};
+    makeMove(moveRaw, PRN, isComputer, changeFEN);
+}
+
+bool Board::makeMoveIfLegal(preCalculation::preCalcType preCalculatedData, moveType move) {
+    map<uint8_t, boardType> availableMoves = getNextMoves(preCalculatedData, player);
+    if (isValidMove(availableMoves, move, preCalculatedData)) {
+        makeMove(move, preCalculatedData->PRN, true);
+        return true;
+    }
+    return false;
+}
+
+bool Board::makeMoveIfLegal(preCalculation::preCalcType preCalculatedData, const string& move) {
+    moveType moveRaw = {parseNotation(move.substr(0, 2)), parseNotation(move.substr(2, 2))};
+    return makeMoveIfLegal(preCalculatedData, moveRaw);
 }
 
 bool Board::isInCheck(preCalculation::preCalcType &preCalc, playerType player) {
@@ -727,3 +743,4 @@ bool Board::isValidMove(array<uint8_t, 2> move, preCalculation::preCalcType preC
     map<uint8_t, boardType> nextMoves = this->getNextMoves(preCalculatedData, !this->player, true);
     return this->isValidMove(nextMoves, move, preCalculatedData);
 }
+#endif
