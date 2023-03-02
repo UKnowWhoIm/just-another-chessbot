@@ -189,7 +189,7 @@ boardType Board::getCastlingMoves(preCalculation::preCalcType preCalculatedData,
     }
 
     if (castlingRights[player][0] && isLeftClear) {
-        castlingMoves.set(kingPos - 3);
+        castlingMoves.set(kingPos - 2);
     }
     if (castlingRights[player][1] && isRightClear) {
         castlingMoves.set(kingPos + 2);
@@ -379,15 +379,16 @@ map<uint8_t, boardType> Board::getNextMoves(preCalculation::preCalcType preCalcu
 
     // Saves ~10us of function calling overhead if preliminary checks are done here
     boardType allPieces = whitePieces | blackPieces;
-    bool isLeftClear = allPieces[kingPos - 1] && allPieces[kingPos - 2] && allPieces[kingPos - 3];
-    bool isRightClear = allPieces[kingPos + 1] && allPieces[kingPos + 2];
-    bool isCastlePossible = !castlingRights[player][0] && !castlingRights[player][1] 
-        && (player == WHITE && kingPos == 4 || player == BLACK && kingPos == 60)
+    bool isLeftClear = !allPieces[kingPos - 1] && !allPieces[kingPos - 2] && !allPieces[kingPos - 3];
+    bool isRightClear = !allPieces[kingPos + 1] && !allPieces[kingPos + 2];
+    bool isCastlePossible = (castlingRights[player][0] || castlingRights[player][1])
+        && (player == BLACK && kingPos == 4 || player == WHITE && kingPos == 60)
         && (isLeftClear || isRightClear);
 
     if (isCastlePossible) {
         moves[kingPos] |= getCastlingMoves(preCalculatedData, kingPos, isLeftClear, isRightClear);
     }
+
     return moves;
 }
 
@@ -582,30 +583,25 @@ void Board::makeMove(moveType move, prnType &PRN, bool isComputer, bool changeFE
     bool isPromotion = false;
 
     // Castling
-    if (tolower(_board[move[0]]) == 'k') {
-        moveType rookMove = {INVALID_POS, INVALID_POS};
-        if (abs(move[0] - move[1]) == 2) {
+    if (tolower(_board[move[0]]) == 'k' && abs(move[0] - move[1]) == 2) {
+        moveType rookMove;
+        if (move[0] - move[1] == -2) {
+            // King
             if (player == WHITE) {
-                _board[61] = _board[63];
-                _board[61] = ' ';
                 rookMove = {63, 61};
             } else {
-                _board[5] = _board[7];
-                _board[7] = ' ';
                 rookMove = {7, 5};
             }
-        } else if (abs(move[0] - move[1]) == 3) {
+        } else if (move[0] - move[1] == 2) {
+            // Queen
             if (player == WHITE) {
-                _board[58] = _board[56];
-                _board[56] = ' ';
                 rookMove = {56, 58};
             } else {
-                _board[2] = _board[0];
-                _board[0] = ' ';
                 rookMove = {0, 2};
             }
         }
-
+        _board[rookMove[1]] = _board[rookMove[0]];
+        _board[rookMove[0]] = ' ';
         changeZobristOnMove(PRN, rookMove);
         disableQueenSideCastling(PRN);
         disableKingSideCastling(PRN);
@@ -694,8 +690,7 @@ void Board::makeMove(const string& move, prnType &PRN, bool isComputer, bool cha
 }
 
 bool Board::makeMoveIfLegal(preCalculation::preCalcType preCalculatedData, moveType move) {
-    map<uint8_t, boardType> availableMoves = getNextMoves(preCalculatedData, player);
-    if (isValidMove(availableMoves, move, preCalculatedData)) {
+    if (isValidMove(move, preCalculatedData)) {
         makeMove(move, preCalculatedData->PRN, true);
         return true;
     }
@@ -720,7 +715,7 @@ bool Board::isInCheck(preCalculation::preCalcType &preCalc, playerType player) {
 bool Board::isValidMove(map<uint8_t, boardType> &moves, array<uint8_t, 2> move, preCalculation::preCalcType preCalculatedData) {
     boardType availableMoves = moves[move[0]];
 
-    if (!availableMoves[move[1]]) {
+    if (!availableMoves.test(move[1])) {
         return false;
     }
 
@@ -728,10 +723,10 @@ bool Board::isValidMove(map<uint8_t, boardType> &moves, array<uint8_t, 2> move, 
     newBoard.makeMove(move, preCalculatedData->PRN, false, false);
 
     uint8_t kingPos = newBoard.findKing(this->player);
-    if (kingPos < 64){
+    if (kingPos < 64) {
         map<uint8_t, boardType> enemyMoves = newBoard.getNextMoves(preCalculatedData, newBoard.player, true);
         for (auto itr = enemyMoves.begin(); itr != enemyMoves.end(); itr++) {
-            if (itr->second[kingPos]) {
+            if (itr->second.test(kingPos)) {
                 return false;
             }
         }
@@ -740,7 +735,7 @@ bool Board::isValidMove(map<uint8_t, boardType> &moves, array<uint8_t, 2> move, 
 }
 
 bool Board::isValidMove(array<uint8_t, 2> move, preCalculation::preCalcType preCalculatedData) {
-    map<uint8_t, boardType> nextMoves = this->getNextMoves(preCalculatedData, !this->player, true);
+    map<uint8_t, boardType> nextMoves = this->getNextMoves(preCalculatedData, this->player, true);
     return this->isValidMove(nextMoves, move, preCalculatedData);
 }
 #endif

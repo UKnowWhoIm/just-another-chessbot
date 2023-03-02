@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <ranges>
+#include <random>
 
 #include "board.cpp"
 
@@ -21,6 +22,16 @@ namespace stringUtils {
             std::ranges::views::transform(to_string);
 
         return {std::ranges::begin(range), std::ranges::end(range)};
+    }
+}
+
+namespace randomUtils {
+    std::random_device rd;
+    std::mt19937 mt(rd());
+    std::uniform_real_distribution<double> fileNameDist(100000.0, 99999999.0);
+
+    std::string getHashFileName() {
+        return std::to_string((long)fileNameDist(mt));
     }
 }
 

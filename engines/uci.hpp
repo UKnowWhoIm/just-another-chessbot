@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <bits/stdc++.h>
+#include <thread>
 
 #include "board.cpp"
 #include "log.hpp"
@@ -13,13 +14,28 @@
 #include "utils.hpp"
 
 namespace uci {
+    void formatOption(std::string name, int defaultVal, int min, int max) {
+        // Type: Spin
+        std::cout << "option name " << name << " type spin default " << defaultVal << " min "
+            << min << " max " << max << std::endl;
+    }
+
+    void formatOption(std::string name, bool defaultVal) {
+        // Type: Check
+        std::cout << "option name " << name << " type check default " << (defaultVal ? "true" : "false")
+            << std::endl;
+    }
+
     void displayOptions() {
-        std::cout << "option name Depth type spin default 5 min 1 max 7" << std::endl;
-        std::cout << "option name EnableAlphaBetaPruning type check default true" << std::endl;
-        std::cout << "option name EnableTranspositionTable type check default true" << std::endl;
-        std::cout << "option name EnableIterativeDeepening type check default true" << std::endl;
-        std::cout << "option name EnableNullMovePruning type check default false" << std::endl;
-        std::cout << "option name EnableQuiescenceSearch type check default false" << std::endl;
+        formatOption("Depth", 5, 1, 7);
+        formatOption("EnableAlphaBetaPruning", true);
+        formatOption("EnableTranspositionTable", true);
+        formatOption("EnableIterativeDeepening", true);
+        formatOption("EnableNullMovePruning", false);
+        formatOption("EnableQuiescenceSearch", false);
+        formatOption("AttackMultiplier", 20, 1, 100);
+        formatOption("DefenceMultiplier", 16, 1, 100);
+        formatOption("SpaceMultiplier", 8, 1, 100);
     }
 
     bool validateCheckType(const string& input, const string optionName) {
@@ -34,12 +50,13 @@ namespace uci {
         const string startPos = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1";
         string input;
         preCalculation::preCalcType preCalculatedData = preCalculation::load();
-        ChessBot bot("random", preCalculatedData);
+        ChessBot bot(randomUtils::getHashFileName(), preCalculatedData);
         bool isCalculatingMove = false;
         Board board(startPos, preCalculatedData->PRN);
         do {
             std::getline(std::cin, input);
-            vector<string> inputArgs = stringUtils::split(input);
+            vector<string> inputArgs = stringUtils::split(input), originalArgs(inputArgs.size());
+            std::copy(inputArgs.begin(), inputArgs.end(), originalArgs.begin());
             for (auto &arg: inputArgs) {
                 std::transform(arg.begin(), arg.end(), arg.begin(), ::tolower);
             }
@@ -90,6 +107,12 @@ namespace uci {
                     if (validateCheckType(inputArgs[4], "enablequiescencesearch")) {
                         bot.setEnableQuiescenceSearch(inputArgs[4] == "true");
                     }
+                } else if (inputArgs[2] == "attackmultiplier") {
+                    bot.setAttackMultiplier(std::stof(inputArgs[4]));
+                } else if (inputArgs[2] == "defencemultiplier") {
+                    bot.setDefenceMultiplier(std::stof(inputArgs[4]));
+                } else if (inputArgs[2] == "spacemultiplier") {
+                    bot.setSpaceMultiplier(std::stof(inputArgs[4]));
                 } else {
                     std::cout << "Invalid setoption command" << std::endl;
                 }
@@ -104,7 +127,7 @@ namespace uci {
                     string fen = "";
                     movesStartIndex += 6; // 5 spaces in fen + 1 "fen" string
                     for (uint8_t i = 2; i < inputArgs.size() && inputArgs[i] != "moves"; i++) {
-                        fen += inputArgs[i] + " ";
+                        fen += originalArgs[i] + " ";
                     }
                     board = Board(fen, preCalculatedData->PRN);
                 }
@@ -116,6 +139,7 @@ namespace uci {
                     }
                 }
             } else if (inputArgs[0] == "go") {
+                logging::d("UCI", "Player: " + std::to_string(board.player));
                 if (inputArgs.size() == 1 || inputArgs[1] == "infinite") {
                     // Infinite search
                     isCalculatingMove = true;

@@ -1,3 +1,5 @@
 __pycache__/**
 engines/transpositionTables/**
 !engines/transpositionTables/.keep
+logs.txt
+stats.json

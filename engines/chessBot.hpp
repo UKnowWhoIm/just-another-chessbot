@@ -17,6 +17,9 @@ class ChessBot {
         bool enableIterativeDeepening;
         bool enableQuiescenceSearch;
         bool enableNullMovePruning;
+        float attackMultiplier;
+        float defenceMultiplier;
+        float spaceMultiplier;
         uint8_t maxDepth;
         uint8_t maxQuiescenceDepth;
         array<bool, MAX_ALLOWED_DEPTH> depthTTFlags;
@@ -59,9 +62,6 @@ class ChessBot {
         long heuristic(Board &boardInstance) {
             stats::heruistic();
             long score = 0;
-            float attackMultiplier = 10;
-            float defenceMultiplier = 8;
-            float spaceMultiplier = 3;
             boardType playerPieces = boardType(0), enemyPieces = boardType(0);
             for (int i=0; i < 64; i++) {
                 char piece = boardInstance.pieceAt(i);
@@ -115,7 +115,7 @@ class ChessBot {
                     }
                     alpha = std::max(alpha, score);
                     if (score >= beta) {
-                        break;
+                        return beta;
                     }
                 }
             }
@@ -132,7 +132,7 @@ class ChessBot {
             moveType bestMove;
             std::shared_ptr<HashEntry> ttEntry = transpositionTable->get(boardInstance.getZobristHash());
             if (ttEntry != nullptr) {
-                if (ttEntry->depth >= depth) {
+                if (ttEntry->depth == depth) {
                     if (ttEntry->flag == TT_EXACT) {
                         // Exact
                         stats::hitTTExact();
@@ -250,7 +250,6 @@ class ChessBot {
             resetDepthTTFlags();
             vector<moveType> nextMoves = boardInstance.orderedNextMoves(preCalcData, boardInstance.player);
             if (nextMoves.size() == 0) {
-                // TODO Game over
                 return;
             }
             vector<std::pair<moveType, long>> moveScoreMap;
@@ -271,15 +270,22 @@ class ChessBot {
                     if (std::abs(score) == INTERRUPTED_SCORE) {
                         break;
                     }
-                    if (score > currentMax) {
+                    // logging::d("Bot", score);
+                    // logging::d("Bot", std::to_string(currentMove[0]) + " " + std::to_string(currentMove[1]));
+                    if (score > currentMax || currentMax == MIN_SCORE) {
                         lastCalculatedMove = currentMove;
                         currentMax = score;
                     }
                     currentPair->second = std::max(currentPair->second, score);
                 }
+                logging::d("ChessBot", "Best move score: " + std::to_string(currentMax) + " with depth: " + std::to_string(currentDepth));
                 std::sort(moveScoreMap.begin(), moveScoreMap.end(), cmpForMovePair);
             }
-            logging::d("ChessBot", "Best move score: " + std::to_string(currentMax) + "with depth: " + std::to_string(currentDepth));
+            boardInstance.makeMove(lastCalculatedMove, preCalcData->PRN);
+            if (boardInstance.isInCheck(preCalcData, !boardInstance.player)) {
+                lastCalculatedMove = {INVALID_POS, INVALID_POS};
+            }
+            logging::d("ChessBot", "Best move score: " + std::to_string(currentMax) + " with depth: " + std::to_string(currentDepth));
         }
 
         void interrupt(bool isUCIMode=false) {
@@ -296,6 +302,9 @@ class ChessBot {
             enableTT = true;
             enableNullMovePruning = false;
             enableQuiescenceSearch = false;
+            attackMultiplier = 20;
+            defenceMultiplier = 16;
+            spaceMultiplier = 8;
             maxDepth = 6;
             maxQuiescenceDepth = 3;
             isInterrupted = false;
@@ -342,6 +351,18 @@ class ChessBot {
             enableQuiescenceSearch = enable;
         }
 
+        void setAttackMultiplier(float val) {
+            attackMultiplier = val;
+        }
+        
+        void setDefenceMultiplier(float val) {
+            defenceMultiplier = val;
+        }
+
+        void setSpaceMultiplier(float val) {
+            spaceMultiplier = val;
+        }
+
         void setMaxDepth(uint8_t depth) {
             maxDepth = depth;
         }
@@ -359,6 +380,11 @@ class ChessBot {
         }
 
         string getLastCalculatedMoveAsNotation() {
+            if (lastCalculatedMove[0] == INVALID_POS) {
+                // Lost
+                logging::d("Game", "Lost");
+                return "(none)";
+            }
             return Board::getNotation(lastCalculatedMove[0]) + Board::getNotation(lastCalculatedMove[1]);
         }
 

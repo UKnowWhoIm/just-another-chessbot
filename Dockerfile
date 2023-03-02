@@ -1,10 +1,10 @@
-FROM python:3.9-alpine3.14
+FROM python:3.9-slim
 
 ARG DEBUG=0
 
-RUN apk update && apk add g++
+RUN apt-get update && apt-get install g++ --no-install-recommends -y
 
-RUN if [ $DEBUG = 1 ]; then apk add gdb; fi
+RUN if [ $DEBUG = 1 ]; then apt-get install gdb --no-install-recommends -y; fi
 
 COPY requirements.txt .
 
