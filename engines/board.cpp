@@ -322,13 +322,17 @@ void Board::parseFen() {
     fullMoves = parseIntInFEN(i);
 }
 
+Board::Board() {
+    
+}
+
 Board::Board(string _fen, prnType& PRN) {
     fen = _fen;
     calcZobristHash(PRN);
     parseFen();
 }
 
-Board::Board(Board &original) {
+Board::Board(const Board &original) {
     this->fen = original.fen;
     this->zobristHash = original.zobristHash;
     parseFen();

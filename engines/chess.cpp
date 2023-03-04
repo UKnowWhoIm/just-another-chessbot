@@ -54,10 +54,7 @@ namespace client {
         array<string, 2> output;
         if (boardInstance.makeMoveIfLegal(preCalculatedData, data.move)) {
             bot.getNextMove(boardInstance);
-            moveType nextMove = bot.getLastCalculatedMove();
-            if (nextMove[0] != INVALID_POS) {
-                boardInstance.makeMove(nextMove, preCalculatedData->PRN);
-            }
+            // moveType nextMove = bot.getLastCalculatedMove();
             output[0] = "OK";
         } else {
             output[0] = "ERR";

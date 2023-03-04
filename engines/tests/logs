@@ -103,3 +103,40 @@ INFO:root:3
 ERROR:root:Error
 INFO:root:Wins: 0, Loss: 0, draw: 0
 INFO:root:4
+INFO:root:0
+WARNING:chess.engine:<UciProtocol (pid=33840)>: stderr >> qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2': No such file or directory
+ERROR:root:Error
+INFO:root:Wins: 0, Loss: 0, draw: 0
+INFO:root:1
+WARNING:chess.engine:<UciProtocol (pid=33845)>: stderr >> qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2': No such file or directory
+ERROR:root:Error
+INFO:root:Wins: 0, Loss: 0, draw: 0
+INFO:root:2
+WARNING:chess.engine:<UciProtocol (pid=33850)>: stderr >> qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2': No such file or directory
+ERROR:root:Error
+INFO:root:Wins: 0, Loss: 0, draw: 0
+INFO:root:3
+WARNING:chess.engine:<UciProtocol (pid=33855)>: stderr >> qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2': No such file or directory
+ERROR:root:Error
+INFO:root:Wins: 0, Loss: 0, draw: 0
+INFO:root:4
+WARNING:chess.engine:<UciProtocol (pid=33860)>: stderr >> qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2': No such file or directory
+ERROR:root:Error
+INFO:root:Wins: 0, Loss: 0, draw: 0
+INFO:root:5
+WARNING:chess.engine:<UciProtocol (pid=33865)>: stderr >> qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2': No such file or directory
+ERROR:root:Error
+INFO:root:Wins: 0, Loss: 0, draw: 0
+INFO:root:6
+WARNING:chess.engine:<UciProtocol (pid=33870)>: stderr >> qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2': No such file or directory
+ERROR:root:Error
+INFO:root:Wins: 0, Loss: 0, draw: 0
+INFO:root:7
+WARNING:chess.engine:<UciProtocol (pid=33875)>: stderr >> qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2': No such file or directory
+ERROR:root:Error
+INFO:root:Wins: 0, Loss: 0, draw: 0
+INFO:root:Write to file
+INFO:root:0
+INFO:root:Loss
+INFO:root:Wins: 0, Loss: 1, draw: 0
+INFO:root:1

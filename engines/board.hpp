@@ -84,7 +84,9 @@ class Board {
 
         Board(string _fen, prnType &PRN);
 
-        Board(Board &original);
+        Board(const Board &original);
+        
+        Board();
 
         bool isCapture(moveType move);
 

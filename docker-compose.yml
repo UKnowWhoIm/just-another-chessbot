@@ -2,7 +2,15 @@ version: "3"
 
 services:
     server:
-        build: .
+        platform: linux/x86_64
+        build:
+            dockerfile: Dockerfile
+            args:
+                - DEBUG=1
+        security_opt:
+            - seccomp:unconfined
+        cap_add:
+            - SYS_PTRACE
         ports:
             - "8000:8000"
         volumes:

@@ -26,13 +26,21 @@ class ChessBot {
         ttType transpositionTable;
         preCalculation::preCalcType preCalcData;
         bool isInterrupted;
-        moveType lastCalculatedMove;
+        struct LastCalculatedState {
+            moveType move;
+            long score;
+        } lastCalculatedState;
 
         void setTTAncientForDepth(uint8_t depth) {
             if (!depthTTFlags[depth]) {
                 depthTTFlags[depth] = true;
                 transpositionTable->resetAge();
             }
+        }
+
+        void resetLastCalculatedState() {
+            lastCalculatedState.move = {INVALID_POS, INVALID_POS};
+            lastCalculatedState.score = MIN_SCORE;
         }
 
         void resetDepthTTFlags() {
@@ -152,8 +160,6 @@ class ChessBot {
                         // Beta cutoff
                         stats::hitTTBeta();
                         beta = std::min(beta, ttEntry->score);
-                    } else {
-                        logging::e("TT", "Invalid flag");
                     }
                     if (enableAlphaBetaPruning && beta <= alpha) {
                         stats::prune();
@@ -245,7 +251,7 @@ class ChessBot {
     public:
         void getNextMove(Board &boardInstance) {
             stats::reset();
-            lastCalculatedMove = {INVALID_POS, INVALID_POS};
+            resetLastCalculatedState();
             isInterrupted = false;
             resetDepthTTFlags();
             vector<moveType> nextMoves = boardInstance.orderedNextMoves(preCalcData, boardInstance.player);
@@ -270,10 +276,8 @@ class ChessBot {
                     if (std::abs(score) == INTERRUPTED_SCORE) {
                         break;
                     }
-                    // logging::d("Bot", score);
-                    // logging::d("Bot", std::to_string(currentMove[0]) + " " + std::to_string(currentMove[1]));
                     if (score > currentMax || currentMax == MIN_SCORE) {
-                        lastCalculatedMove = currentMove;
+                        setLastCalculatedState(currentMove, score);
                         currentMax = score;
                     }
                     currentPair->second = std::max(currentPair->second, score);
@@ -281,9 +285,9 @@ class ChessBot {
                 logging::d("ChessBot", "Best move score: " + std::to_string(currentMax) + " with depth: " + std::to_string(currentDepth));
                 std::sort(moveScoreMap.begin(), moveScoreMap.end(), cmpForMovePair);
             }
-            boardInstance.makeMove(lastCalculatedMove, preCalcData->PRN);
+            boardInstance.makeMove(getLastCalculatedMove(), preCalcData->PRN);
             if (boardInstance.isInCheck(preCalcData, !boardInstance.player)) {
-                lastCalculatedMove = {INVALID_POS, INVALID_POS};
+                resetLastCalculatedState();
             }
             logging::d("ChessBot", "Best move score: " + std::to_string(currentMax) + " with depth: " + std::to_string(currentDepth));
         }
@@ -296,10 +300,35 @@ class ChessBot {
             }
         }
 
+        ChessBot(const ChessBot& otherChessBot) {
+            enableAlphaBetaPruning = otherChessBot.enableAlphaBetaPruning;
+            enableIterativeDeepening = otherChessBot.enableIterativeDeepening;
+            enableTT = otherChessBot.enableTT;
+            enableNullMovePruning = otherChessBot.enableNullMovePruning;
+            enableQuiescenceSearch = otherChessBot.enableQuiescenceSearch;
+            attackMultiplier = otherChessBot.attackMultiplier;
+            defenceMultiplier = otherChessBot.defenceMultiplier;
+            spaceMultiplier = otherChessBot.spaceMultiplier;
+            maxDepth = otherChessBot.maxDepth;
+            maxQuiescenceDepth = otherChessBot.maxQuiescenceDepth;
+            isInterrupted = false;
+            resetLastCalculatedState();
+            if (enableTT) {
+                this->transpositionTable = std::make_unique<TranspositionTable>(randomUtils::getHashFileName());
+            } else {
+                this->transpositionTable = std::make_unique<TranspositionTable>();
+            }
+            this->preCalcData = preCalcData;
+        }
+
+        ChessBot() {
+
+        }
+
         ChessBot(string ttFileName, preCalculation::preCalcType preCalcData) {
-            enableAlphaBetaPruning = true;
-            enableIterativeDeepening = true;
-            enableTT = true;
+            enableAlphaBetaPruning = false;
+            enableIterativeDeepening = false;
+            enableTT = false;
             enableNullMovePruning = false;
             enableQuiescenceSearch = false;
             attackMultiplier = 20;
@@ -308,7 +337,7 @@ class ChessBot {
             maxDepth = 6;
             maxQuiescenceDepth = 3;
             isInterrupted = false;
-            lastCalculatedMove = {INVALID_POS, INVALID_POS};
+            resetLastCalculatedState();
             if (enableTT) {
                 this->transpositionTable = std::make_unique<TranspositionTable>(ttFileName);
             } else {
@@ -323,6 +352,11 @@ class ChessBot {
 
         void dumpCache() {
             transpositionTable->dumpCache();
+        }
+
+        void setLastCalculatedState(moveType move, long score) {
+            lastCalculatedState.move = move;
+            lastCalculatedState.score = score;
         }
 
         void setEnableAlphaBetaPruning(bool enable) {
@@ -354,7 +388,7 @@ class ChessBot {
         void setAttackMultiplier(float val) {
             attackMultiplier = val;
         }
-        
+
         void setDefenceMultiplier(float val) {
             defenceMultiplier = val;
         }
@@ -375,17 +409,21 @@ class ChessBot {
             return isInterrupted;
         }
 
+        LastCalculatedState getLastCalculatedState() {
+            return lastCalculatedState;
+        }
+
         moveType getLastCalculatedMove() {
-            return lastCalculatedMove;
+            return lastCalculatedState.move;
         }
 
         string getLastCalculatedMoveAsNotation() {
-            if (lastCalculatedMove[0] == INVALID_POS) {
+            if (lastCalculatedState.move[0] == INVALID_POS) {
                 // Lost
                 logging::d("Game", "Lost");
                 return "(none)";
             }
-            return Board::getNotation(lastCalculatedMove[0]) + Board::getNotation(lastCalculatedMove[1]);
+            return Board::getNotation(lastCalculatedState.move[0]) + Board::getNotation(lastCalculatedState.move[1]);
         }
 
         bool getEnableAlphaBetaPruning() {

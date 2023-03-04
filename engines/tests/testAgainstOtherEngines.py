@@ -76,9 +76,7 @@ def game_overhead(attack, defence, space):
         logging.info("Write to file")
         json.dump(stats, f)
 
-for attack in range(8, 40):
-    for defence in range(8, 40):
-        for space in range(1, 15):
-            game_overhead(attack, defence, space)
-
-            
+# for attack in range(8, 40):
+#     for defence in range(8, 40):
+#         for space in range(1, 15):
+game_overhead(20, 16, 8)
